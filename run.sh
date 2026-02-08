@@ -33,4 +33,4 @@ run "Intro & Outro added" python3 introEndOutro.py
 
 echo "[✓] Video Anonymizer    Done"
 rm output/.output{1,2,3,4}/* > /dev/null 2>&1
-rm input/vid*.mp4 > /dev/null 2>&1
+#rm input/vid*.mp4 > /dev/null 2>&1
