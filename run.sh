@@ -24,7 +24,8 @@ run() {
   spinner $! "$label"
 }
 
-run "Mask & Glitch      " python3 face_mask_glitch_video.py
+run "Mask               " python3 face_mask.py
+run "Glitch             " python3 glitch.py
 run "Voice Encryption   " python3 audio.py
 run "Transitions        " python3 introNoutro.py
 run "Background & Pip   " python3 backNpip.py
