@@ -18,7 +18,7 @@ from tqdm import tqdm
 @dataclass
 class Config:
     input_dir: str = "input"
-    output_dir: str = "output/.output1"
+    output_dir: str = "output/.output0"
 
     mask_path: str = "resources/mask.png"
     keypoints_path: str = "resources/mask_keypoints.json"
@@ -26,13 +26,8 @@ class Config:
     max_width: int = 1280
     max_faces: int = 1
 
-    glitch_intensity: int = 3
-    noise_level: int = 60
-    max_band_width: int = 25
-    max_shift: int = 25
 
 CFG = Config()
-rng = np.random.default_rng(42)
 
 LEFT_EYE = 33
 RIGHT_EYE = 263
@@ -67,11 +62,15 @@ def create_mask_keypoints_interactive(mask_path, keypoints_path):
     while True:
         temp = display.copy()
         if len(points) < 3:
-            cv2.putText(temp, labels[len(points)], (20, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            cv2.putText(
+                temp, labels[len(points)], (20, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2
+            )
         else:
-            cv2.putText(temp, "ENTRÉE pour valider", (20, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(
+                temp, "ENTRÉE pour valider", (20, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2
+            )
 
         cv2.imshow("Calibration masque", temp)
         key = cv2.waitKey(1) & 0xFF
@@ -131,21 +130,6 @@ def blend_rgba(frame, overlay):
     alpha = overlay[:, :, 3:4] / 255.0
     frame[:] = alpha * overlay[:, :, :3] + (1 - alpha) * frame
     return frame.astype(np.uint8)
-
-def apply_glitch(frame):
-    h, w, _ = frame.shape
-    out = frame.copy()
-
-    for _ in range(CFG.glitch_intensity):
-        y = rng.integers(0, h)
-        bh = rng.integers(5, CFG.max_band_width)
-        shift = rng.integers(-CFG.max_shift, CFG.max_shift)
-        out[y:y+bh] = np.roll(out[y:y+bh], shift, axis=1)
-
-    noise = rng.integers(0, CFG.noise_level, (h, w), dtype=np.uint8)
-    out[:, :, 1] = np.clip(out[:, :, 1] + noise, 0, 255)
-
-    return out
 
 # ======================
 # VIDEO PROCESSING
@@ -217,11 +201,6 @@ def process_video(video_path, temp_out):
             )
 
             warped = sanitize_rgba(warped)
-
-            alpha_mask = warped[:, :, 3] > 0
-            glitched = apply_glitch(frame.copy())
-            frame[alpha_mask] = glitched[alpha_mask]
-
             frame = blend_rgba(frame, warped)
 
         out.write(frame)
@@ -258,8 +237,10 @@ def merge_audio(src, video, out):
 # ======================
 
 def main():
-    videos = [v for v in os.listdir(CFG.input_dir)
-              if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv"))]
+    videos = [
+        v for v in os.listdir(CFG.input_dir)
+        if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv"))
+    ]
 
     if not videos:
         raise RuntimeError("Aucune vidéo")
