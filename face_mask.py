@@ -62,15 +62,11 @@ def create_mask_keypoints_interactive(mask_path, keypoints_path):
     while True:
         temp = display.copy()
         if len(points) < 3:
-            cv2.putText(
-                temp, labels[len(points)], (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2
-            )
+            cv2.putText(temp, labels[len(points)], (20, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         else:
-            cv2.putText(
-                temp, "ENTRÉE pour valider", (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2
-            )
+            cv2.putText(temp, "ENTRÉE pour valider", (20, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
         cv2.imshow("Calibration masque", temp)
         key = cv2.waitKey(1) & 0xFF
@@ -82,17 +78,12 @@ def create_mask_keypoints_interactive(mask_path, keypoints_path):
 
     cv2.destroyAllWindows()
 
-    data = {
-        "left_eye": list(points[0]),
-        "right_eye": list(points[1]),
-        "chin": list(points[2])
-    }
-
-    os.makedirs(os.path.dirname(keypoints_path), exist_ok=True)
     with open(keypoints_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-    print("[OK] mask_keypoints.json créé")
+        json.dump({
+            "left_eye": list(points[0]),
+            "right_eye": list(points[1]),
+            "chin": list(points[2])
+        }, f, indent=2)
 
 # ======================
 # LOAD STATIC
@@ -122,8 +113,7 @@ def landmark_xy(lm, idx, w, h):
     return int(lm[idx].x * w), int(lm[idx].y * h)
 
 def sanitize_rgba(img):
-    alpha = img[:, :, 3]
-    img[alpha == 0, :3] = 0
+    img[img[:, :, 3] == 0, :3] = 0
     return img
 
 def blend_rgba(frame, overlay):
@@ -137,9 +127,6 @@ def blend_rgba(frame, overlay):
 
 def process_video(video_path, temp_out):
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError("Vidéo illisible")
-
     fps = cap.get(cv2.CAP_PROP_FPS)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -161,23 +148,23 @@ def process_video(video_path, temp_out):
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     last_landmarks = None
-    no_face_counter = 0
+    no_face = 0
 
-    for _ in tqdm(range(total), desc=os.path.basename(video_path)):
+    for _ in tqdm(range(total)):
         ret, frame = cap.read()
         if not ret:
             break
 
         frame = resize_frame(frame)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = face_mesh.process(rgb)
+        res = face_mesh.process(rgb)
 
-        if result.multi_face_landmarks:
-            last_landmarks = result.multi_face_landmarks[0].landmark
-            no_face_counter = 0
+        if res.multi_face_landmarks:
+            last_landmarks = res.multi_face_landmarks[0].landmark
+            no_face = 0
         else:
-            no_face_counter += 1
-            if no_face_counter > 2:
+            no_face += 1
+            if no_face > 2:
                 last_landmarks = None
 
         if last_landmarks:
@@ -185,23 +172,23 @@ def process_video(video_path, temp_out):
             right = landmark_xy(last_landmarks, RIGHT_EYE, w, h)
             chin = landmark_xy(last_landmarks, CHIN, w, h)
 
-            src = np.float32([
-                MASK_KP["left_eye"],
-                MASK_KP["right_eye"],
-                MASK_KP["chin"]
-            ])
-            dst = np.float32([left, right, chin])
+            M = cv2.getAffineTransform(
+                np.float32([MASK_KP["left_eye"], MASK_KP["right_eye"], MASK_KP["chin"]]),
+                np.float32([left, right, chin])
+            )
 
-            M = cv2.getAffineTransform(src, dst)
             warped = cv2.warpAffine(
                 MASK, M, (w, h),
-                flags=cv2.INTER_LINEAR,
                 borderMode=cv2.BORDER_CONSTANT,
                 borderValue=(0, 0, 0, 0)
             )
 
             warped = sanitize_rgba(warped)
             frame = blend_rgba(frame, warped)
+
+            # FLAG : masque présent (pixel vert invisible)
+            if np.any(warped[:, :, 3] > 0):
+                frame[0:2, 0:2, 1] = 255
 
         out.write(frame)
 
@@ -237,23 +224,16 @@ def merge_audio(src, video, out):
 # ======================
 
 def main():
-    videos = [
-        v for v in os.listdir(CFG.input_dir)
-        if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv"))
-    ]
+    for v in os.listdir(CFG.input_dir):
+        if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
+            src = os.path.join(CFG.input_dir, v)
+            tmp = os.path.join(CFG.output_dir, v + ".tmp.mp4")
+            out = os.path.join(CFG.output_dir, v)
 
-    if not videos:
-        raise RuntimeError("Aucune vidéo")
+            process_video(src, tmp)
+            merge_audio(src, tmp, out)
 
-    for v in videos:
-        src = os.path.join(CFG.input_dir, v)
-        tmp = os.path.join(CFG.output_dir, v + ".tmp.mp4")
-        out = os.path.join(CFG.output_dir, v)
-
-        process_video(src, tmp)
-        merge_audio(src, tmp, out)
-
-        print(f"[OK] {out}")
+            print(f"[OK] {out}")
 
 if __name__ == "__main__":
     main()
