@@ -20,15 +20,16 @@ class Config:
 
     max_width: int = 1280
 
-    glitch_intensity: int = 3
-    noise_level: int = 60
-    max_band_width: int = 25
-    max_shift: int = 25
+    # Glitch / CRT tuning
+    glitch_intensity: int = 5
+    max_band_width: int = 20
+    max_shift: int = 20
 
+    green_noise_level: int = 30      # Noise Level
+    rb_attenuation: float = 0.60    # Niveau de vert 1 = no-green 0.10 = full-green
+    scanline_strength: int = 20      # lignes CRT
 
 CFG = Config()
-rng = np.random.default_rng(42)
-
 os.makedirs(CFG.output_dir, exist_ok=True)
 
 # ======================
@@ -42,28 +43,53 @@ def resize_frame(frame):
     scale = CFG.max_width / w
     return cv2.resize(frame, (int(w * scale), int(h * scale)))
 
-def apply_glitch(frame):
-    h, w, _ = frame.shape
-    out = frame.copy()
+def mask_present(frame):
+    # Détection du marqueur vert laissé par face_mask.py
+    return frame[0:2, 0:2, 1].mean() > 200
 
-    # Décalages horizontaux par bandes
+# ======================
+# VHS / CRT GLITCH CORE
+# ======================
+
+def apply_vhs_crt_glitch(frame, rng):
+    h, w, _ = frame.shape
+    out = frame.astype(np.int16)
+
+    # --- ÉCRASEMENT R/B (signature CRT verte) ---
+    out[:, :, 0] = (out[:, :, 0] * CFG.rb_attenuation)
+    out[:, :, 2] = (out[:, :, 2] * CFG.rb_attenuation)
+
+    # --- BRUIT VERT PUR (CORRECTION NUMPY SAFE) ---
+    green_noise = (
+        rng.integers(
+            0,
+            CFG.green_noise_level * 2,
+            (h, w),
+            dtype=np.uint16
+        ).astype(np.int16) - CFG.green_noise_level
+    )
+    out[:, :, 1] += green_noise
+
+    # --- SCANLINES CRT ---
+    for y in range(0, h, 2):
+        out[y, :, 1] -= CFG.scanline_strength
+
+    # --- BANDES GLITCH HORIZONTALES ---
     for _ in range(CFG.glitch_intensity):
         y = rng.integers(0, h)
-        bh = rng.integers(5, CFG.max_band_width)
+        bh = rng.integers(10, CFG.max_band_width)
         shift = rng.integers(-CFG.max_shift, CFG.max_shift)
         out[y:y + bh] = np.roll(out[y:y + bh], shift, axis=1)
 
-    # Bruit sur le canal vert (look glitch numérique)
-    noise = rng.integers(0, CFG.noise_level, (h, w), dtype=np.uint8)
-    out[:, :, 1] = np.clip(out[:, :, 1] + noise, 0, 255)
-
-    return out
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 # ======================
 # VIDEO PROCESSING
 # ======================
 
 def process_video(video_path, temp_out):
+    rng = np.random.default_rng(hash(video_path) & 0xffffffff)
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Vidéo illisible : {video_path}")
@@ -93,7 +119,10 @@ def process_video(video_path, temp_out):
             break
 
         frame = resize_frame(frame)
-        frame = apply_glitch(frame)
+
+        if mask_present(frame):
+            frame = apply_vhs_crt_glitch(frame, rng)
+
         out.write(frame)
 
     cap.release()
