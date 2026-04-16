@@ -25,6 +25,7 @@ class Config:
 
     max_width: int = 1280
     max_faces: int = 1
+    detect_scale: float = 3.0   # upscale x3 avant detection (aide pour les petits visages)
 
 
 CFG = Config()
@@ -121,47 +122,140 @@ def blend_rgba(frame, overlay):
     frame[:] = alpha * overlay[:, :, :3] + (1 - alpha) * frame
     return frame.astype(np.uint8)
 
+
+# ======================
+# MULTI-REGION DETECTION
+# ======================
+
+def get_scan_regions(w, h):
+    """Retourne des regions (x, y, rw, rh) couvrant le frame.
+    Zones : frame entier, 4 coins (50%), 4 bords (50%), centre.
+    Overlap garanti pour ne rater aucun visage."""
+    hw, hh = w // 2, h // 2
+    regions = [
+        (0, 0, w, h),          # frame entier
+        (0, 0, hw, hh),        # top-left
+        (hw, 0, hw, hh),       # top-right
+        (0, hh, hw, hh),       # bottom-left
+        (hw, hh, hw, hh),      # bottom-right
+        (w // 4, h // 4, hw, hh),  # centre
+        (0, 0, w, hh),         # top half
+        (0, hh, w, hh),        # bottom half
+        (0, 0, hw, h),         # left half
+        (hw, 0, hw, h),        # right half
+    ]
+    return regions
+
+
+def detect_in_regions(rgb, face_mesh, w, h):
+    """Essaie de detecter un visage d'abord sur le frame entier,
+    puis sur des sous-regions upscalees si la detection echoue.
+    Retourne les landmarks en coordonnees normalisees [0-1] du frame COMPLET, ou None."""
+
+    # 1) Essai sur frame entier (upscale)
+    if CFG.detect_scale > 1.0:
+        det = cv2.resize(rgb, (int(w * CFG.detect_scale), int(h * CFG.detect_scale)))
+    else:
+        det = rgb
+    res = face_mesh.process(det)
+    if res.multi_face_landmarks:
+        return res.multi_face_landmarks[0].landmark
+
+    # 2) Scan par regions : crop + upscale agressif (x4 minimum)
+    regions = get_scan_regions(w, h)
+    for (rx, ry, rw, rh) in regions[1:]:  # skip index 0 (deja teste)
+        if rw < 50 or rh < 50:
+            continue
+
+        crop = rgb[ry:ry+rh, rx:rx+rw]
+
+        # Upscale la region pour que les petits visages deviennent detectables
+        target_w = max(rw * 4, 640)
+        scale_r = target_w / rw
+        target_h = int(rh * scale_r)
+        crop_up = cv2.resize(crop, (target_w, target_h))
+
+        res = face_mesh.process(crop_up)
+        if res.multi_face_landmarks:
+            lm = res.multi_face_landmarks[0].landmark
+            # Convertir les landmarks normalises [0-1] de la region
+            # vers des landmarks normalises [0-1] du frame complet
+            class AdjustedLandmark:
+                def __init__(self, x, y, z):
+                    self.x = x
+                    self.y = y
+                    self.z = z
+
+            adjusted = []
+            for p in lm:
+                ax = (rx + p.x * rw) / w
+                ay = (ry + p.y * rh) / h
+                adjusted.append(AdjustedLandmark(ax, ay, p.z))
+            return adjusted
+
+    return None
+
 # ======================
 # VIDEO PROCESSING
 # ======================
 
 def process_video(video_path, temp_out):
+    print(f"  [DEBUG] Ouverture : {video_path}")
     cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if not cap.isOpened():
+        raise RuntimeError(f"Impossible d'ouvrir : {video_path}")
 
-    ret, frame = cap.read()
-    frame = resize_frame(frame)
-    h, w = frame.shape[:2]
+    fps   = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(f"  [DEBUG] {orig_w}x{orig_h} @ {fps:.1f}fps, {total} frames")
+
+    if orig_w <= 0 or orig_h <= 0:
+        raise RuntimeError(f"Dimensions invalides pour : {video_path}")
+
+    if orig_w > CFG.max_width:
+        scale = CFG.max_width / orig_w
+        out_w = int(orig_w * scale)
+        out_h = int(orig_h * scale)
+    else:
+        out_w, out_h = orig_w, orig_h
 
     out = cv2.VideoWriter(
         temp_out,
         cv2.VideoWriter_fourcc(*"mp4v"),
         fps,
-        (w, h)
+        (out_w, out_h)
     )
 
+    # FaceMesh NEUF pour chaque video — evite toute corruption d'etat
     face_mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=CFG.max_faces
+        static_image_mode=True,
+        max_num_faces=CFG.max_faces,
+        min_detection_confidence=0.3
     )
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     last_landmarks = None
     no_face = 0
+    detected = 0
+    written = 0
 
-    for _ in tqdm(range(total)):
+    for i in tqdm(range(total), desc=os.path.basename(video_path)):
         ret, frame = cap.read()
         if not ret:
             break
 
         frame = resize_frame(frame)
+        h, w = frame.shape[:2]
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        res = face_mesh.process(rgb)
 
-        if res.multi_face_landmarks:
-            last_landmarks = res.multi_face_landmarks[0].landmark
+        # Detection multi-region (frame entier puis sous-zones upscalees)
+        found_lm = detect_in_regions(rgb, face_mesh, w, h)
+
+        if found_lm is not None:
+            last_landmarks = found_lm
             no_face = 0
+            detected += 1
         else:
             no_face += 1
             if no_face > 2:
@@ -186,15 +280,18 @@ def process_video(video_path, temp_out):
             warped = sanitize_rgba(warped)
             frame = blend_rgba(frame, warped)
 
-            # FLAG : masque présent (pixel vert invisible)
+            # FLAG : masque present (pixel vert invisible)
             if np.any(warped[:, :, 3] > 0):
                 frame[0:2, 0:2, 1] = 255
 
         out.write(frame)
+        written += 1
 
     cap.release()
     out.release()
     face_mesh.close()
+
+    print(f"  [RESULT] Visage detecte : {detected}/{total} frames | Ecrites : {written}/{total}")
 
 # ======================
 # AUDIO MERGE
@@ -224,16 +321,27 @@ def merge_audio(src, video, out):
 # ======================
 
 def main():
-    for v in os.listdir(CFG.input_dir):
-        if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
-            src = os.path.join(CFG.input_dir, v)
-            tmp = os.path.join(CFG.output_dir, v + ".tmp.mp4")
-            out = os.path.join(CFG.output_dir, v)
+    videos = sorted([
+        v for v in os.listdir(CFG.input_dir)
+        if v.lower().endswith((".mp4", ".mov", ".avi", ".mkv"))
+    ])
 
-            process_video(src, tmp)
-            merge_audio(src, tmp, out)
+    if not videos:
+        print("[ERREUR] Aucune video trouvee dans", CFG.input_dir)
+        return
 
-            print(f"[OK] {out}")
+    print(f"[INFO] {len(videos)} video(s) : {videos}")
+    print(f"[INFO] detect_scale = {CFG.detect_scale}")
+
+    for i, v in enumerate(videos, 1):
+        src = os.path.join(CFG.input_dir, v)
+        tmp = os.path.join(CFG.output_dir, v + ".tmp.mp4")
+        out = os.path.join(CFG.output_dir, v)
+
+        print(f"\n[{i}/{len(videos)}] {v}")
+        process_video(src, tmp)
+        merge_audio(src, tmp, out)
+        print(f"[OK] {out}")
 
 if __name__ == "__main__":
     main()
