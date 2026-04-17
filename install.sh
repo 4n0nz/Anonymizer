@@ -60,12 +60,7 @@ pip install --upgrade pip wheel setuptools
 # ------------------------------------------------------------
 echo "📦 Installation dépendances Python..."
 
-pip install \
-    numpy \
-    opencv-python \
-    moviepy \
-	mediapipe \
-    tqdm
+pip install -r requirements.txt
 
 # ------------------------------------------------------------
 # Vérifications finales

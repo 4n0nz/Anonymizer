@@ -1,14 +1,14 @@
 @echo off
 chcp 65001 >nul
 
-:: Memoriser le chemin absolu du dossier NewScript (avec \ final)
+:: Memoriser le chemin absolu du dossier Win (avec \ final)
 set "SCRIPTS=%~dp0"
 
 :: Se placer dans le dossier parent (Anonymizer) :
 :: les scripts cherchent input\, output\, resources\ en relatif
 cd /d "%~dp0.."
 
-:: Activer le virtualenv (chemin absolu vers NewScript\mask_env)
+:: Activer le virtualenv (chemin absolu vers Win\mask_env)
 call "%SCRIPTS%mask_env\Scripts\activate.bat"
 
 echo [*] Mask...

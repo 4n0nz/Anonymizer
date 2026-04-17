@@ -55,7 +55,7 @@ pip install --upgrade pip wheel setuptools
 :: Installation dependances Python
 echo.
 echo Installation des dependances Python...
-pip install numpy opencv-python mediapipe tqdm moviepy
+pip install -r "..\requirements.txt"
 if errorlevel 1 ( echo [ERREUR] Installation des dependances echouee & pause & exit /b 1 )
 
 :: Verification finale
