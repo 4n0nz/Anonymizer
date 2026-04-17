@@ -64,8 +64,8 @@ echo Verification des imports...
 python -c "import cv2, numpy, mediapipe, tqdm; print('[OK] OpenCV :', cv2.__version__); print('[OK] NumPy :', numpy.__version__); print('[OK] MediaPipe OK'); print('[OK] tqdm OK')"
 if errorlevel 1 ( echo [ERREUR] Un import a echoue & pause & exit /b 1 )
 
-:: Extraction des ressources (7-Zip)
-if exist "resources\resources.7z.001" (
+:: Extraction des ressources (7-Zip) — dossier parent
+if exist "..\resources\resources.7z.001" (
     echo.
     echo Extraction des ressources...
     where 7z >nul 2>&1
@@ -73,9 +73,9 @@ if exist "resources\resources.7z.001" (
         echo [ATTENTION] 7-Zip introuvable. Installez-le depuis https://www.7-zip.org/
         echo et ajoutez-le au PATH, puis relancez ce script.
     ) else (
-        7z x resources\resources.7z.001 -o.\resources -y
-        del resources\resources.7z.* 2>nul
-        echo [OK] Ressources extraites
+        7z x "..\resources\resources.7z.001" -o"..\resources" -y
+        del "..\resources\resources.7z.*" 2>nul
+        echo [OK] Ressources extraites dans le dossier parent
     )
 )
 
