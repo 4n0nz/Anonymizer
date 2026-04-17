@@ -50,6 +50,25 @@ else:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ======================
+# PYTHON EXECUTABLE
+# ======================
+
+def find_python():
+    """Utilise le Python du virtualenv mask_env si disponible,
+    sinon le Python courant (sys.executable)."""
+    candidates = [
+        os.path.join(BASE_DIR, "mask_env", "bin", "python"),         # Linux / Mac
+        os.path.join(BASE_DIR, "mask_env", "Scripts", "python.exe"), # Windows
+        os.path.join(BASE_DIR, "Win",      "mask_env", "Scripts", "python.exe"), # Win/mask_env
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return sys.executable  # fallback : Python courant
+
+PYTHON = find_python()
+
+# ======================
 # UTILS
 # ======================
 
@@ -71,6 +90,7 @@ def print_header():
     print("         Video Anonymizer — Pipeline")
     print("=" * 54)
     print(f"  Scripts : {BASE_DIR}")
+    print(f"  Python  : {PYTHON}")
     print(f"  Etapes  : {len(STEPS)}")
     print("=" * 54)
     print()
@@ -107,7 +127,7 @@ def run_step(label, script, step_num, total_steps):
     start    = time.time()
 
     proc = subprocess.Popen(
-        [sys.executable, script_path],
+        [PYTHON, script_path],
         cwd=BASE_DIR,
         stdout=open(log_path, "w"),
         stderr=subprocess.STDOUT,
