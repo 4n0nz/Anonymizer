@@ -18,7 +18,7 @@ import threading
 # ======================
 
 STEPS = [
-    ("Masque visage",    "face_mask.py"),
+    ("Mask face",        "face_mask.py"),
     ("Glitch / CRT",     "glitch.py"),
     ("Chiffrement voix", "audio.py"),
     ("Transitions",      "introNoutro.py"),
@@ -91,7 +91,7 @@ def print_header():
     print("=" * 54)
     print(f"  Scripts : {BASE_DIR}")
     print(f"  Python  : {PYTHON}")
-    print(f"  Etapes  : {len(STEPS)}")
+    print(f"  Phases  : {len(STEPS)}")
     print("=" * 54)
     print()
 
