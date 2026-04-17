@@ -20,7 +20,7 @@ import threading
 STEPS = [
     ("Mask face",        "face_mask.py"),
     ("Glitch / CRT",     "glitch.py"),
-    ("Chiffrement voix", "audio.py"),
+    ("Voice Encryption", "audio.py"),
     ("Transitions",      "introNoutro.py"),
     ("Background & PIP", "backNpip.py"),
     ("Intro & Outro",    "introEndOutro.py"),
