@@ -25,7 +25,7 @@ class Config:
 
     max_width: int = 1280
     max_faces: int = 1
-    detect_scale: float = 3.0   # upscale x3 avant detection (aide pour les petits visages)
+    detect_scale: float = 2.0   # upscale x2 avant detection (aide pour les petits visages)
 
 
 CFG = Config()
@@ -356,7 +356,7 @@ def main():
 
     if not videos:
         print("[ERREUR] Aucune video trouvee dans", CFG.input_dir)
-        return
+        sys.exit(1)
 
     print(f"[INFO] {len(videos)} video(s) : {videos}")
     print(f"[INFO] detect_scale = {CFG.detect_scale}")
