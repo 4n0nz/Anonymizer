@@ -144,9 +144,15 @@ def get_scan_regions(w, h):
     return regions
 
 
-def detect_in_regions(rgb, face_mesh, w, h):
-    """Detecte un visage sur le frame entier puis sur des sous-regions upscalees."""
+class AdjustedLandmark:
+    __slots__ = ("x", "y", "z")
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
 
+
+def _try_full_frame(rgb, face_mesh, w, h):
     if CFG.detect_scale > 1.0:
         det = cv2.resize(rgb, (int(w * CFG.detect_scale), int(h * CFG.detect_scale)))
     else:
@@ -154,37 +160,47 @@ def detect_in_regions(rgb, face_mesh, w, h):
     res = face_mesh.process(det)
     if res.multi_face_landmarks:
         return res.multi_face_landmarks[0].landmark
-
-    regions = get_scan_regions(w, h)
-    for (rx, ry, rw, rh) in regions[1:]:
-        if rw < 50 or rh < 50:
-            continue
-
-        crop = rgb[ry:ry+rh, rx:rx+rw]
-
-        target_w = max(rw * 4, 640)
-        scale_r = target_w / rw
-        target_h = int(rh * scale_r)
-        crop_up = cv2.resize(crop, (target_w, target_h))
-
-        res = face_mesh.process(crop_up)
-        if res.multi_face_landmarks:
-            lm = res.multi_face_landmarks[0].landmark
-
-            class AdjustedLandmark:
-                def __init__(self, x, y, z):
-                    self.x = x
-                    self.y = y
-                    self.z = z
-
-            adjusted = []
-            for p in lm:
-                ax = (rx + p.x * rw) / w
-                ay = (ry + p.y * rh) / h
-                adjusted.append(AdjustedLandmark(ax, ay, p.z))
-            return adjusted
-
     return None
+
+
+def _try_region(rgb, face_mesh, w, h, rx, ry, rw, rh):
+    if rw < 50 or rh < 50:
+        return None
+    crop     = rgb[ry:ry + rh, rx:rx + rw]
+    target_w = max(rw * 4, 640)
+    target_h = int(rh * target_w / rw)
+    crop_up  = cv2.resize(crop, (target_w, target_h))
+    res = face_mesh.process(crop_up)
+    if not res.multi_face_landmarks:
+        return None
+    return [
+        AdjustedLandmark((rx + p.x * rw) / w, (ry + p.y * rh) / h, p.z)
+        for p in res.multi_face_landmarks[0].landmark
+    ]
+
+
+def detect_in_regions(rgb, face_mesh, w, h, best_region=None):
+    if best_region is not None:
+        if best_region == "full":
+            lm = _try_full_frame(rgb, face_mesh, w, h)
+            if lm is not None:
+                return lm, "full"
+        else:
+            lm = _try_region(rgb, face_mesh, w, h, *best_region)
+            if lm is not None:
+                return lm, best_region
+
+    if best_region != "full":
+        lm = _try_full_frame(rgb, face_mesh, w, h)
+        if lm is not None:
+            return lm, "full"
+
+    for region in get_scan_regions(w, h)[1:]:
+        lm = _try_region(rgb, face_mesh, w, h, *region)
+        if lm is not None:
+            return lm, region
+
+    return None, None
 
 # ======================
 # VIDEO PROCESSING
@@ -226,6 +242,7 @@ def process_video(video_path, temp_out):
     )
 
     last_landmarks = None
+    best_region    = None
     no_face = 0
     detected = 0
     written = 0
@@ -239,7 +256,7 @@ def process_video(video_path, temp_out):
         h, w = frame.shape[:2]
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        found_lm = detect_in_regions(rgb, face_mesh, w, h)
+        found_lm, best_region = detect_in_regions(rgb, face_mesh, w, h, best_region)
 
         if found_lm is not None:
             last_landmarks = found_lm
@@ -249,6 +266,7 @@ def process_video(video_path, temp_out):
             no_face += 1
             if no_face > 2:
                 last_landmarks = None
+                best_region = None
 
         if last_landmarks:
             left = landmark_xy(last_landmarks, LEFT_EYE, w, h)

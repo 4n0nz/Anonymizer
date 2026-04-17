@@ -147,12 +147,17 @@ def get_scan_regions(w, h):
     return regions
 
 
-def detect_in_regions(rgb, face_mesh, w, h):
-    """Essaie de detecter un visage d'abord sur le frame entier,
-    puis sur des sous-regions upscalees si la detection echoue.
-    Retourne les landmarks en coordonnees normalisees [0-1] du frame COMPLET, ou None."""
+class AdjustedLandmark:
+    """Landmark avec coordonnees normalisees [0-1] ramenees au frame complet."""
+    __slots__ = ("x", "y", "z")
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
 
-    # 1) Essai sur frame entier (upscale)
+
+def _try_full_frame(rgb, face_mesh, w, h):
+    """Teste la detection sur le frame entier upscale. Retourne landmarks ou None."""
     if CFG.detect_scale > 1.0:
         det = cv2.resize(rgb, (int(w * CFG.detect_scale), int(h * CFG.detect_scale)))
     else:
@@ -160,40 +165,61 @@ def detect_in_regions(rgb, face_mesh, w, h):
     res = face_mesh.process(det)
     if res.multi_face_landmarks:
         return res.multi_face_landmarks[0].landmark
-
-    # 2) Scan par regions : crop + upscale agressif (x4 minimum)
-    regions = get_scan_regions(w, h)
-    for (rx, ry, rw, rh) in regions[1:]:  # skip index 0 (deja teste)
-        if rw < 50 or rh < 50:
-            continue
-
-        crop = rgb[ry:ry+rh, rx:rx+rw]
-
-        # Upscale la region pour que les petits visages deviennent detectables
-        target_w = max(rw * 4, 640)
-        scale_r = target_w / rw
-        target_h = int(rh * scale_r)
-        crop_up = cv2.resize(crop, (target_w, target_h))
-
-        res = face_mesh.process(crop_up)
-        if res.multi_face_landmarks:
-            lm = res.multi_face_landmarks[0].landmark
-            # Convertir les landmarks normalises [0-1] de la region
-            # vers des landmarks normalises [0-1] du frame complet
-            class AdjustedLandmark:
-                def __init__(self, x, y, z):
-                    self.x = x
-                    self.y = y
-                    self.z = z
-
-            adjusted = []
-            for p in lm:
-                ax = (rx + p.x * rw) / w
-                ay = (ry + p.y * rh) / h
-                adjusted.append(AdjustedLandmark(ax, ay, p.z))
-            return adjusted
-
     return None
+
+
+def _try_region(rgb, face_mesh, w, h, rx, ry, rw, rh):
+    """Teste la detection sur une sous-region upscalee.
+    Retourne les landmarks convertis en coords du frame complet, ou None."""
+    if rw < 50 or rh < 50:
+        return None
+    crop    = rgb[ry:ry + rh, rx:rx + rw]
+    target_w = max(rw * 4, 640)
+    target_h = int(rh * target_w / rw)
+    crop_up  = cv2.resize(crop, (target_w, target_h))
+    res = face_mesh.process(crop_up)
+    if not res.multi_face_landmarks:
+        return None
+    return [
+        AdjustedLandmark((rx + p.x * rw) / w, (ry + p.y * rh) / h, p.z)
+        for p in res.multi_face_landmarks[0].landmark
+    ]
+
+
+def detect_in_regions(rgb, face_mesh, w, h, best_region=None):
+    """Detecte un visage en testant en priorite la derniere region qui a fonctionne,
+    puis le frame entier, puis toutes les sous-regions.
+
+    Retourne (landmarks, region) :
+      - region = 'full'         si detecte sur le frame entier
+      - region = (rx,ry,rw,rh) si detecte dans une sous-region
+      - (None, None)            si aucun visage trouve
+    """
+
+    # 1) Derniere region connue en priorite — evite de scanner si le visage n'a pas bouge
+    if best_region is not None:
+        if best_region == "full":
+            lm = _try_full_frame(rgb, face_mesh, w, h)
+            if lm is not None:
+                return lm, "full"
+        else:
+            lm = _try_region(rgb, face_mesh, w, h, *best_region)
+            if lm is not None:
+                return lm, best_region
+
+    # 2) Frame entier (si pas deja teste)
+    if best_region != "full":
+        lm = _try_full_frame(rgb, face_mesh, w, h)
+        if lm is not None:
+            return lm, "full"
+
+    # 3) Scan de toutes les sous-regions
+    for region in get_scan_regions(w, h)[1:]:
+        lm = _try_region(rgb, face_mesh, w, h, *region)
+        if lm is not None:
+            return lm, region
+
+    return None, None
 
 # ======================
 # VIDEO PROCESSING
@@ -236,6 +262,7 @@ def process_video(video_path, temp_out):
     )
 
     last_landmarks = None
+    best_region    = None   # derniere region ou le visage a ete detecte
     no_face = 0
     detected = 0
     written = 0
@@ -249,8 +276,8 @@ def process_video(video_path, temp_out):
         h, w = frame.shape[:2]
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Detection multi-region (frame entier puis sous-zones upscalees)
-        found_lm = detect_in_regions(rgb, face_mesh, w, h)
+        # Detection : teste best_region en premier, puis fallback sur les autres zones
+        found_lm, best_region = detect_in_regions(rgb, face_mesh, w, h, best_region)
 
         if found_lm is not None:
             last_landmarks = found_lm
@@ -260,6 +287,7 @@ def process_video(video_path, temp_out):
             no_face += 1
             if no_face > 2:
                 last_landmarks = None
+                best_region = None   # reset : le visage a disparu, on rescanne tout
 
         if last_landmarks:
             left = landmark_xy(last_landmarks, LEFT_EYE, w, h)
