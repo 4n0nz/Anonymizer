@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 run.py — Pipeline Video Anonymizer
-Remplace run.sh (Linux/WSL) et run.bat (Windows)
+Remplace run.bat (Windows) — cross-platform
 Usage : python run.py   ou   python3 run.py
 """
 

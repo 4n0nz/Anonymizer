@@ -87,9 +87,9 @@ echo "✅ Installation terminée"
 echo
 echo "Pour utiliser :"
 echo "  add video into input folder"
-echo "  execute the run.sh"
+echo "  execute : python3 run.py"
 
-chmod +x run.sh
+chmod +x run.py
 7z x resources/resources.7z.001 -o./resources
 rm resources/resources.7z.*
 #source mask_env/bin/activate
