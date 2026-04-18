@@ -45,7 +45,7 @@ MAX_FACES      = 1
 DETECT_SCALE   = 2.0
 EMA_ALPHA      = 0.35   # Lissage temporel (0 = immobile, 1 = pas de lissage)
 FEATHER_RADIUS = 11     # Pixels de bord mou sur le masque (0 = desactive)
-MASK_SCALE     = 1.1    # Facteur d'agrandissement du masque (1.0 = original)
+MASK_SCALE     = 1.2    # Facteur d'agrandissement du masque (1.0 = original)
 
 # ======================
 # GLITCH / CRT
