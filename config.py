@@ -41,8 +41,10 @@ MAX_WIDTH        = 1280
 # ======================
 # FACE MASK
 # ======================
-MAX_FACES    = 1
-DETECT_SCALE = 2.0
+MAX_FACES      = 1
+DETECT_SCALE   = 2.0
+EMA_ALPHA      = 0.35   # Lissage temporel (0 = immobile, 1 = pas de lissage)
+FEATHER_RADIUS = 11     # Pixels de bord mou sur le masque (0 = desactive)
 
 # ======================
 # GLITCH / CRT

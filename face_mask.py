@@ -25,6 +25,8 @@ class Config:
     max_width: int      = C.MAX_WIDTH
     max_faces: int      = C.MAX_FACES
     detect_scale: float = C.DETECT_SCALE
+    ema_alpha: float    = C.EMA_ALPHA
+    feather_radius: int = C.FEATHER_RADIUS
 
 
 CFG = Config()
@@ -115,6 +117,17 @@ def landmark_xy(lm, idx, w, h):
 def sanitize_rgba(img):
     img[img[:, :, 3] == 0, :3] = 0
     return img
+
+def feather_mask(warped, radius):
+    """Applique un flou gaussien sur le canal alpha pour adoucir les bords du masque."""
+    if radius <= 0:
+        return warped
+    k = radius * 2 + 1  # taille du kernel (doit etre impair)
+    alpha = warped[:, :, 3].astype(np.float32)
+    alpha = cv2.GaussianBlur(alpha, (k, k), 0)
+    result = warped.copy()
+    result[:, :, 3] = np.clip(alpha, 0, 255).astype(np.uint8)
+    return result
 
 def blend_rgba(frame, overlay):
     alpha = overlay[:, :, 3:4] / 255.0
@@ -262,6 +275,7 @@ def process_video(video_path, temp_out):
 
     last_landmarks = None
     best_region    = None   # derniere region ou le visage a ete detecte
+    ema_pts        = None   # points lisses par EMA (float32)
     no_face = 0
     detected = 0
     written = 0
@@ -282,20 +296,28 @@ def process_video(video_path, temp_out):
             last_landmarks = found_lm
             no_face = 0
             detected += 1
+
+            # Lissage EMA sur les 3 points cles
+            raw_pts = np.float32([
+                landmark_xy(found_lm, LEFT_EYE, w, h),
+                landmark_xy(found_lm, RIGHT_EYE, w, h),
+                landmark_xy(found_lm, CHIN, w, h),
+            ])
+            if ema_pts is None:
+                ema_pts = raw_pts.copy()
+            else:
+                ema_pts = CFG.ema_alpha * raw_pts + (1 - CFG.ema_alpha) * ema_pts
         else:
             no_face += 1
             if no_face > 2:
                 last_landmarks = None
                 best_region = None   # reset : le visage a disparu, on rescanne tout
+                ema_pts     = None
 
-        if last_landmarks:
-            left = landmark_xy(last_landmarks, LEFT_EYE, w, h)
-            right = landmark_xy(last_landmarks, RIGHT_EYE, w, h)
-            chin = landmark_xy(last_landmarks, CHIN, w, h)
-
+        if last_landmarks and ema_pts is not None:
             M = cv2.getAffineTransform(
                 np.float32([MASK_KP["left_eye"], MASK_KP["right_eye"], MASK_KP["chin"]]),
-                np.float32([left, right, chin])
+                ema_pts
             )
 
             warped = cv2.warpAffine(
@@ -305,6 +327,7 @@ def process_video(video_path, temp_out):
             )
 
             warped = sanitize_rgba(warped)
+            warped = feather_mask(warped, CFG.feather_radius)
             frame = blend_rgba(frame, warped)
 
             # FLAG : masque present (pixel vert invisible)
