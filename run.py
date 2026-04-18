@@ -222,9 +222,16 @@ def main():
         os.remove(log_path)
 
 
+def restore_terminal():
+    """Restaure les parametres du terminal sur Linux/Mac (apres tqdm/cv2)."""
+    if sys.platform != "win32":
+        subprocess.call(["stty", "sane"], stderr=subprocess.DEVNULL)
+
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\n\n  Pipeline interrompu par l'utilisateur (Ctrl+C)")
-        sys.exit(0)
+    finally:
+        restore_terminal()
