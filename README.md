@@ -62,15 +62,58 @@ Double-click Win\run.bat
 
 ---
 
+## Configuration
+
+All settings are centralized in a single file : **`config.py`**
+
+> No need to touch the individual scripts. Every path, parameter and tuning value lives here.
+
+```python
+# Folder routing between pipeline steps
+DIRS = {
+    "input":   "input",
+    "output0": "output/.output0",  # face_mask  → glitch
+    "output1": "output/.output1",  # glitch     → audio
+    ...
+}
+
+# Resources
+MASK_PATH  = "resources/mask.png"
+BACKGROUND = "resources/background.mp4"
+INTRO      = "resources/intro.mp4"
+...
+
+# Face detection
+MAX_WIDTH    = 1280
+DETECT_SCALE = 2.0   # upscale factor before MediaPipe detection
+
+# Glitch / CRT effect
+RB_ATTENUATION    = 0.60   # green tint intensity
+GLITCH_INTENSITY  = 5      # number of glitch bands per frame
+SCANLINE_STRENGTH = 20     # CRT scanline darkness
+
+# Voice encryption
+PITCH_UP   = 1.25
+PITCH_DOWN = 0.80
+
+# Background & PIP
+PIP_SCALE = 0.7    # presenter window size (ratio)
+MARGIN    = 80     # pixels from edge
+```
+
+---
+
 ## Project structure
 
 ```
 Anonymizer/
 ├── input/               # Drop your source videos here
 ├── output/              # Final anonymized videos
-├── resources/           # Mask PNG + keypoints JSON
+├── logs/                # One log file per run (timestamped)
+├── resources/           # Mask PNG, background, intro/outro videos
+├── config.py            # ← Central config — edit this file only
 ├── face_mask.py         # Step 1 — Face masking
-├── glitch.py            # Step 2 — Glitch effect
+├── glitch.py            # Step 2 — Glitch / CRT effect
 ├── audio.py             # Step 3 — Voice encryption
 ├── introNoutro.py       # Step 4 — Transitions
 ├── backNpip.py          # Step 5 — Background & PIP
