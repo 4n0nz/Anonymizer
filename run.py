@@ -70,7 +70,8 @@ def find_python():
             return path
     return sys.executable  # fallback : Python courant
 
-PYTHON = find_python()
+PYTHON      = find_python()
+LABEL_WIDTH = max(len(label) for label, _ in STEPS)
 
 # ======================
 # UTILS
@@ -149,7 +150,7 @@ def run_step(label, script, step_num, total_steps):
         elapsed = time.time() - start
         bar     = progress_bar(step_num - 1, total_steps)
         char    = SPINNER[spin_i % len(SPINNER)]
-        print(f"\r  {bar}  [{step_num}/{total_steps}] {label}  {char}  {format_time(elapsed)}", end="", flush=True)
+        print(f"\r  {bar}  [{step_num}/{total_steps}] {label:<{LABEL_WIDTH}}  {char}  {format_time(elapsed)}", end="", flush=True)
         spin_i += 1
         time.sleep(0.15)
 
@@ -162,7 +163,7 @@ def run_step(label, script, step_num, total_steps):
 
     if returncode == 0:
         bar = progress_bar(step_num, total_steps)
-        print(f"\r  {bar}  [{step_num}/{total_steps}] {label}  {OK}  ({format_time(elapsed)})")
+        print(f"\r  {bar}  [{step_num}/{total_steps}] {label:<{LABEL_WIDTH}}  {OK}  ({format_time(elapsed)})")
         return True
     else:
         print(f"\r      {ERR}  ECHEC après {format_time(elapsed)}                    ")
