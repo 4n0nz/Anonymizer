@@ -86,9 +86,10 @@ def format_time(seconds):
 
 def print_header():
     print()
-    print("  ▄▀█ █▄░█ █▀█ █▄░█ ▀▄▀ █▀▄▀█ ▀█▀ ▀▀█ █▀▀ █▀█")
-    print("  █▀█ █░▀█ █▄█ █░▀█ ░█░ █░░░█ ░█░ ▄▄▀ ██▄ █▀▄")
-    print("        Video Anonymization Pipeline")
+    print("  ╔═╗ ╔╗╔ ╔═╗ ╔╗╔ ╦ ╦ ╔╦╗ ╦ ═╗ ╔══ ╔═╗")
+    print("  ╠═╣ ║║║ ║ ║ ║║║ ╚╦╝ ║║║ ║ ╔╝ ╠═╗ ╠╦╝")
+    print("  ╩ ╩ ╝╚╝ ╚═╝ ╝╚╝  ╩  ╩ ╩ ╩ ╚═ ╚══ ╩╚═")
+    print("       Video Anonymization Pipeline")
     print()
     print("=" * 54)
     print(f"  Scripts : {BASE_DIR}")
