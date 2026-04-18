@@ -4,18 +4,19 @@ import random
 import subprocess
 import json
 import sys
+import config as C
 
 # ================= CONFIG =================
-BACKGROUND_NAME = "resources/background.mp4"
-INPUT_DIR = "output/.output3"
-OUTPUT_DIR = "output/.output4"
-OUTPUT_NAME = "output.mp4"
+BACKGROUND_NAME = C.BACKGROUND
+INPUT_DIR       = C.DIRS["output3"]
+OUTPUT_DIR      = C.DIRS["output4"]
+OUTPUT_NAME     = "output.mp4"
 
-MARGIN = 80
-PIP_SCALE = 0.7
-POP = 0.3
-FADE = 0.3
-AUDIO_FADE = 0.3
+MARGIN     = C.MARGIN
+PIP_SCALE  = C.PIP_SCALE
+POP        = C.POP
+FADE       = C.FADE
+AUDIO_FADE = C.AUDIO_FADE
 # ==========================================
 
 

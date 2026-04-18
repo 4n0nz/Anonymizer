@@ -8,6 +8,7 @@ import subprocess
 import shutil
 from dataclasses import dataclass
 from tqdm import tqdm
+import config as C
 
 # ======================
 # CONFIG
@@ -15,19 +16,15 @@ from tqdm import tqdm
 
 @dataclass
 class Config:
-    input_dir: str = "output/.output0"
-    output_dir: str = "output/.output1"
-
-    max_width: int = 1280
-
-    # Glitch / CRT tuning
-    glitch_intensity: int = 5
-    max_band_width: int = 20
-    max_shift: int = 20
-
-    green_noise_level: int = 30      # Noise Level
-    rb_attenuation: float = 0.60    # Niveau de vert 1 = no-green 0.10 = full-green
-    scanline_strength: int = 20      # lignes CRT
+    input_dir: str         = C.DIRS["output0"]
+    output_dir: str        = C.DIRS["output1"]
+    max_width: int         = C.MAX_WIDTH
+    glitch_intensity: int  = C.GLITCH_INTENSITY
+    max_band_width: int    = C.MAX_BAND_WIDTH
+    max_shift: int         = C.MAX_SHIFT
+    green_noise_level: int = C.GREEN_NOISE_LEVEL
+    rb_attenuation: float  = C.RB_ATTENUATION
+    scanline_strength: int = C.SCANLINE_STRENGTH
 
 CFG = Config()
 os.makedirs(CFG.output_dir, exist_ok=True)

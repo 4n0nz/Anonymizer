@@ -10,6 +10,7 @@ import subprocess
 import shutil
 from dataclasses import dataclass
 from tqdm import tqdm
+import config as C
 
 # ======================
 # CONFIG
@@ -17,15 +18,13 @@ from tqdm import tqdm
 
 @dataclass
 class Config:
-    input_dir: str = "input"
-    output_dir: str = "output/.output0"
-
-    mask_path: str = "resources/mask.png"
-    keypoints_path: str = "resources/mask_keypoints.json"
-
-    max_width: int = 1280
-    max_faces: int = 1
-    detect_scale: float = 2.0   # upscale x2 avant detection (aide pour les petits visages)
+    input_dir: str      = C.DIRS["input"]
+    output_dir: str     = C.DIRS["output0"]
+    mask_path: str      = C.MASK_PATH
+    keypoints_path: str = C.KEYPOINTS_PATH
+    max_width: int      = C.MAX_WIDTH
+    max_faces: int      = C.MAX_FACES
+    detect_scale: float = C.DETECT_SCALE
 
 
 CFG = Config()

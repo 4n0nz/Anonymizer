@@ -2,12 +2,13 @@
 import os
 import subprocess
 import sys
+import config as C
 
-INPUT_DIR = "output/.output2"
-OUTPUT_DIR = "output/.output3"
-INTRO = "resources/pipintro.mp4"
-OUTRO = "resources/pipoutro.mp4"
-VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".avi")
+INPUT_DIR        = C.DIRS["output2"]
+OUTPUT_DIR       = C.DIRS["output3"]
+INTRO            = C.PIP_INTRO
+OUTRO            = C.PIP_OUTRO
+VIDEO_EXTENSIONS = C.VIDEO_EXTENSIONS
 
 def get_resolution(video):
     cmd = [

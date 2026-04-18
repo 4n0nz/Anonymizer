@@ -6,24 +6,24 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import shutil
 import logging
+import config as C
 
 # ======================
 # CONFIG
 # ======================
-INPUT_DIR = Path("output/.output1")
-OUTPUT_DIR = Path("output/.output2")
+INPUT_DIR  = Path(C.DIRS["output1"])
+OUTPUT_DIR = Path(C.DIRS["output2"])
 
-OUTPUT_PREFIX = "source"
-OUTPUT_EXT = ".mp4"
+OUTPUT_PREFIX  = "source"
+OUTPUT_EXT     = ".mp4"
 
-PITCH_UP = 1.25
-PITCH_DOWN = 0.80
+PITCH_UP       = C.PITCH_UP
+PITCH_DOWN     = C.PITCH_DOWN
+AUDIO_RATE     = C.AUDIO_RATE
+AUDIO_CHANNELS = C.AUDIO_CHANNELS
+AUDIO_BITRATE  = C.AUDIO_BITRATE
 
-AUDIO_RATE = 44100
-AUDIO_CHANNELS = 2
-AUDIO_BITRATE = "192k"
-
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
+VIDEO_EXTENSIONS = set(C.VIDEO_EXTENSIONS)
 MAX_WORKERS = max(1, shutil.os.cpu_count() - 1)
 
 # ======================
