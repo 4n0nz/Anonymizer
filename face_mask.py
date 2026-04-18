@@ -27,6 +27,7 @@ class Config:
     detect_scale: float = C.DETECT_SCALE
     ema_alpha: float    = C.EMA_ALPHA
     feather_radius: int = C.FEATHER_RADIUS
+    mask_scale: float   = C.MASK_SCALE
 
 
 CFG = Config()
@@ -315,9 +316,13 @@ def process_video(video_path, temp_out):
                 ema_pts     = None
 
         if last_landmarks and ema_pts is not None:
+            # Scale du masque autour du centroide des 3 points
+            centroid   = ema_pts.mean(axis=0)
+            scaled_pts = centroid + (ema_pts - centroid) * CFG.mask_scale
+
             M = cv2.getAffineTransform(
                 np.float32([MASK_KP["left_eye"], MASK_KP["right_eye"], MASK_KP["chin"]]),
-                ema_pts
+                scaled_pts
             )
 
             warped = cv2.warpAffine(
