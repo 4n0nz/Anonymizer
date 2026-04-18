@@ -12,6 +12,7 @@ import os
 import glob
 import time
 import threading
+from datetime import datetime
 
 # ======================
 # CONFIGURATION
@@ -48,6 +49,9 @@ else:
     BAR_EMPTY = "░"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+RUN_LOG  = os.path.join(LOGS_DIR, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".log")
 
 # ======================
 # PYTHON EXECUTABLE
@@ -95,6 +99,7 @@ def print_header():
     print(f"  Scripts : {BASE_DIR}")
     print(f"  Python  : {PYTHON}")
     print(f"  Phases  : {len(STEPS)}")
+    print(f"  Log     : {RUN_LOG}")
     print("=" * 54)
     print()
 
@@ -121,33 +126,39 @@ def run_step(label, script, step_num, total_steps):
         print(f"  {ERR} Script introuvable : {script}")
         return False
 
-    # Ligne de debut
-    bar = progress_bar(step_num - 1, total_steps)
-    print(f"  {bar}  [{step_num}/{total_steps}] {label}")
-
     # Lancement du process
-    log_path = os.path.join(BASE_DIR, ".pipeline.log")
-    start    = time.time()
+    start = time.time()
+
+    with open(RUN_LOG, "a") as log_file:
+        log_file.write(f"\n{'='*60}\n")
+        log_file.write(f"[{datetime.now().strftime('%H:%M:%S')}] STEP {step_num}/{total_steps} — {label}\n")
+        log_file.write(f"{'='*60}\n")
+        log_file.flush()
 
     proc = subprocess.Popen(
         [PYTHON, script_path],
         cwd=BASE_DIR,
-        stdout=open(log_path, "w"),
+        stdout=open(RUN_LOG, "a"),
         stderr=subprocess.STDOUT,
         text=True
     )
 
-    # Spinner dans le thread principal pendant que le script tourne
+    # Spinner — meme ligne que le resultat final (pas de print initial)
     spin_i = 0
     while proc.poll() is None:
         elapsed = time.time() - start
+        bar     = progress_bar(step_num - 1, total_steps)
         char    = SPINNER[spin_i % len(SPINNER)]
-        print(f"\r      {char}  In Progress...  {format_time(elapsed)}", end="", flush=True)
+        print(f"\r  {bar}  [{step_num}/{total_steps}] {label}  {char}  {format_time(elapsed)}", end="", flush=True)
         spin_i += 1
         time.sleep(0.15)
 
     elapsed   = time.time() - start
     returncode = proc.returncode
+
+    with open(RUN_LOG, "a") as log_file:
+        status = "OK" if returncode == 0 else "ECHEC"
+        log_file.write(f"[{datetime.now().strftime('%H:%M:%S')}] {status} — {label} ({format_time(elapsed)})\n")
 
     if returncode == 0:
         bar = progress_bar(step_num, total_steps)
@@ -161,14 +172,14 @@ def run_step(label, script, step_num, total_steps):
         print(f"  {'='*50}")
         # Affiche les dernieres lignes du log
         try:
-            with open(log_path) as f:
+            with open(RUN_LOG) as f:
                 lines = f.readlines()
             for line in lines[-30:]:
                 print("  " + line, end="")
         except Exception:
             pass
         print(f"\n  {'='*50}")
-        print(f"  Log complet : {log_path}")
+        print(f"  Log complet : {RUN_LOG}")
         return False
 
 
@@ -212,11 +223,7 @@ def main():
 
     cleanup()
     print_footer(time.time() - pipeline_start)
-
-    # Supprime le log temporaire si tout s'est bien passe
-    log_path = os.path.join(BASE_DIR, ".pipeline.log")
-    if os.path.exists(log_path):
-        os.remove(log_path)
+    print(f"  Log sauvegarde : {RUN_LOG}")
 
 
 def restore_terminal():
