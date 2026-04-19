@@ -108,7 +108,7 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     black_cy = s_y + int((meta["y"] + meta["h"] / 2) * scale_y)
 
     # Centrer le PIP sur ce point
-    p_x = black_cx - p_w // 2
+    p_x = black_cx - p_w // 2 + 400
     p_y = black_cy - p_h // 2
 
     b = PIP_BORDER
