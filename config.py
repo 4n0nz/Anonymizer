@@ -18,6 +18,7 @@ DIRS = {
     "output3":     "output/.output3",   # introNoutro → backNpip
     "output4":     "output/.output4",   # backNpip    → introEndOutro
     "final":       "output",            # introEndOutro → sortie finale
+    "metadata":    "output/.metadata",  # positions PIP (JSON)
 }
 
 # ======================
@@ -45,7 +46,14 @@ MAX_FACES      = 1
 DETECT_SCALE   = 2.0
 EMA_ALPHA      = 0.35   # Lissage temporel (0 = immobile, 1 = pas de lissage)
 FEATHER_RADIUS = 11     # Pixels de bord mou sur le masque (0 = desactive)
-MASK_SCALE     = 1.2    # Facteur d'agrandissement du masque (1.0 = original)
+MASK_SCALE     = 1.1    # Facteur d'agrandissement du masque (1.0 = original)
+
+# ======================
+# PIP EXTRACTION
+# ======================
+PIP_EXTRACT         = True   # Activer l'extraction PIP automatique
+PIP_MAX_FACE_RATIO  = 0.40   # Si visage < 30% de la largeur du frame → c'est un PIP
+PIP_PADDING         = 0.60   # Marge autour du PIP detecte (20%)
 
 # ======================
 # GLITCH / CRT
@@ -70,7 +78,7 @@ AUDIO_BITRATE  = "192k"
 # BACKGROUND & PIP
 # ======================
 MARGIN    = 80
-PIP_SCALE = 0.7
+PIP_SCALE = 1.25
 POP       = 0.3
 FADE      = 0.3
 AUDIO_FADE = 0.3

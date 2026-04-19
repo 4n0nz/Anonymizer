@@ -14,9 +14,6 @@ import config as C
 INPUT_DIR  = Path(C.DIRS["output1"])
 OUTPUT_DIR = Path(C.DIRS["output2"])
 
-OUTPUT_PREFIX  = "source"
-OUTPUT_EXT     = ".mp4"
-
 PITCH_UP       = C.PITCH_UP
 PITCH_DOWN     = C.PITCH_DOWN
 AUDIO_RATE     = C.AUDIO_RATE
@@ -43,9 +40,6 @@ def require_ffmpeg():
         raise RuntimeError("ffmpeg introuvable")
     if not shutil.which("ffprobe"):
         raise RuntimeError("ffprobe introuvable")
-
-def next_output_name(index: int) -> Path:
-    return OUTPUT_DIR / f"{OUTPUT_PREFIX}{index}{OUTPUT_EXT}"
 
 def run(cmd: list):
     """Exécute FFmpeg et capture stderr pour debug"""
@@ -145,8 +139,8 @@ def main():
         raise RuntimeError("Aucune vidéo trouvée dans input")
 
     jobs = [
-        (video, next_output_name(i + 1))
-        for i, video in enumerate(videos)
+        (video, OUTPUT_DIR / video.name)
+        for video in videos
     ]
 
     log.info(f"{len(jobs)} vidéos | {MAX_WORKERS} workers")

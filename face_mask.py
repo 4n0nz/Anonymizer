@@ -6,6 +6,7 @@ import mediapipe as mp
 import numpy as np
 import json
 import os
+import sys
 import subprocess
 import shutil
 from dataclasses import dataclass
@@ -18,16 +19,19 @@ import config as C
 
 @dataclass
 class Config:
-    input_dir: str      = C.DIRS["input"]
-    output_dir: str     = C.DIRS["output0"]
-    mask_path: str      = C.MASK_PATH
-    keypoints_path: str = C.KEYPOINTS_PATH
-    max_width: int      = C.MAX_WIDTH
-    max_faces: int      = C.MAX_FACES
-    detect_scale: float = C.DETECT_SCALE
-    ema_alpha: float    = C.EMA_ALPHA
-    feather_radius: int = C.FEATHER_RADIUS
-    mask_scale: float   = C.MASK_SCALE
+    input_dir: str       = C.DIRS["input"]
+    output_dir: str      = C.DIRS["output0"]
+    mask_path: str       = C.MASK_PATH
+    keypoints_path: str  = C.KEYPOINTS_PATH
+    max_width: int       = C.MAX_WIDTH
+    max_faces: int       = C.MAX_FACES
+    detect_scale: float  = C.DETECT_SCALE
+    ema_alpha: float     = C.EMA_ALPHA
+    feather_radius: int  = C.FEATHER_RADIUS
+    mask_scale: float    = C.MASK_SCALE
+    pip_extract: bool    = C.PIP_EXTRACT
+    pip_max_ratio: float = C.PIP_MAX_FACE_RATIO
+    pip_padding: float   = C.PIP_PADDING
 
 
 CFG = Config()
@@ -114,6 +118,17 @@ def resize_frame(frame):
 
 def landmark_xy(lm, idx, w, h):
     return int(lm[idx].x * w), int(lm[idx].y * h)
+
+def compute_face_bbox(landmarks, w, h):
+    """Bounding box serre autour du visage via tous les landmarks."""
+    xs = [lm.x * w for lm in landmarks]
+    ys = [lm.y * h for lm in landmarks]
+    x1 = max(0, int(min(xs)))
+    y1 = max(0, int(min(ys)))
+    x2 = min(w, int(max(xs)))
+    y2 = min(h, int(max(ys)))
+    return np.float32([x1, y1, x2 - x1, y2 - y1])  # x, y, w, h
+
 
 def sanitize_rgba(img):
     img[img[:, :, 3] == 0, :3] = 0
@@ -277,6 +292,8 @@ def process_video(video_path, temp_out):
     last_landmarks = None
     best_region    = None   # derniere region ou le visage a ete detecte
     ema_pts        = None   # points lisses par EMA (float32)
+    ema_bbox       = None   # bounding box lissee par EMA
+    bbox_history   = []     # historique des bbox (pour detecter PIP)
     no_face = 0
     detected = 0
     written = 0
@@ -308,12 +325,22 @@ def process_video(video_path, temp_out):
                 ema_pts = raw_pts.copy()
             else:
                 ema_pts = CFG.ema_alpha * raw_pts + (1 - CFG.ema_alpha) * ema_pts
+
+            # Lissage EMA sur la bounding box (pour detection PIP)
+            if CFG.pip_extract:
+                raw_bbox = compute_face_bbox(found_lm, w, h)
+                if ema_bbox is None:
+                    ema_bbox = raw_bbox.copy()
+                else:
+                    ema_bbox = CFG.ema_alpha * raw_bbox + (1 - CFG.ema_alpha) * ema_bbox
+                bbox_history.append(ema_bbox.copy())
         else:
             no_face += 1
             if no_face > 2:
                 last_landmarks = None
                 best_region = None   # reset : le visage a disparu, on rescanne tout
                 ema_pts     = None
+                ema_bbox    = None
 
         if last_landmarks and ema_pts is not None:
             # Scale du masque autour du centroide des 3 points
@@ -347,6 +374,105 @@ def process_video(video_path, temp_out):
     face_mesh.close()
 
     print(f"  [RESULT] Visage detecte : {detected}/{total} frames | Ecrites : {written}/{total}")
+
+    # --- Detection PIP ---
+    pip_bbox = None
+    if CFG.pip_extract and bbox_history:
+        all_bboxes  = np.array(bbox_history)                          # (N, 4)
+        median_bbox = np.median(all_bboxes, axis=0).astype(int)       # x, y, w, h
+        bx, by, bw, bh = median_bbox
+        ratio = bw / out_w
+        if ratio < CFG.pip_max_ratio:
+            pip_bbox = (int(bx), int(by), int(bw), int(bh))
+            print(f"  [PIP] Visage detecte comme PIP — {bw}x{bh}px (ratio={ratio:.2f} < {CFG.pip_max_ratio})")
+        else:
+            print(f"  [PIP] Visage plein ecran (ratio={ratio:.2f}) — pas de PIP")
+
+    return pip_bbox
+
+# ======================
+# PIP EXTRACTION
+# ======================
+
+def extract_pip(masked_video, original_src, bbox, frame_w, frame_h):
+    """
+    Routing :
+      - _pip.mp4    → output0  (crop du masqué, passera par glitch)
+      - _screen.mp4 → output1  (vidéo originale, skip glitch)
+    """
+    if shutil.which("ffmpeg") is None:
+        print("  [PIP] ffmpeg introuvable — extraction ignoree")
+        return None, None
+
+    bx, by, bw, bh = bbox
+
+    # Centre du visage
+    cx = bx + bw // 2
+    cy = by + bh // 2
+
+    # Padding autour de la zone webcam
+    pad_x = int(bw * CFG.pip_padding)
+    pad_y = int(bh * CFG.pip_padding)
+    pw = bw + pad_x * 2
+    ph = bh + pad_y * 2
+
+    # Force ratio 16:9
+    target_ratio = 16 / 9
+    if pw / ph < target_ratio:
+        pw = int(ph * target_ratio)
+    else:
+        ph = int(pw / target_ratio)
+
+    # Centrer le crop autour du visage
+    px = cx - pw // 2
+    py = cy - ph // 2
+
+    # Clamp dans les limites du frame
+    px = max(0, min(px, frame_w - pw))
+    py = max(0, min(py, frame_h - ph))
+    pw = min(pw, frame_w - px)
+    ph = min(ph, frame_h - py)
+
+    # libx264 exige des dimensions paires
+    pw = pw - (pw % 2)
+    ph = ph - (ph % 2)
+
+    basename = os.path.splitext(os.path.basename(original_src))[0]
+    dir_out0 = C.DIRS["output0"]
+    dir_out1 = C.DIRS["output1"]
+    dir_meta = C.DIRS["metadata"]
+    os.makedirs(dir_out0, exist_ok=True)
+    os.makedirs(dir_out1, exist_ok=True)
+    os.makedirs(dir_meta, exist_ok=True)
+
+    pip_out    = os.path.join(dir_out0, basename + "_pip.mp4")
+    screen_out = os.path.join(dir_out1, basename + "_screen.mp4")
+
+    # Sauvegarde position pour backNpip.py
+    import json
+    with open(os.path.join(dir_meta, basename + "_pip.json"), "w") as f:
+        json.dump({"x": int(px), "y": int(py), "w": int(pw), "h": int(ph)}, f)
+    print(f"  [PIP] Zone detectee : x={px} y={py} w={pw} h={ph}")
+
+    # PIP : crop depuis la video maskée → output0 → sera glitchée
+    subprocess.run([
+        "ffmpeg", "-y", "-i", masked_video,
+        "-vf", f"crop={pw}:{ph}:{px}:{py}",
+        "-c:v", "libx264", "-crf", "18",
+        "-c:a", "copy", pip_out
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"  [PIP] pip    → {pip_out}")
+
+    # SCREEN : video originale → output1 → skip glitch
+    subprocess.run([
+        "ffmpeg", "-y", "-i", original_src,
+        "-c:v", "libx264", "-crf", "18",
+        "-c:a", "copy", screen_out
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"  [PIP] screen → {screen_out}")
+
+    return pip_out, screen_out
+
 
 # ======================
 # AUDIO MERGE
@@ -394,9 +520,19 @@ def main():
         out = os.path.join(CFG.output_dir, v)
 
         print(f"\n[{i}/{len(videos)}] {v}")
-        process_video(src, tmp)
+        pip_bbox = process_video(src, tmp)
         merge_audio(src, tmp, out)
         print(f"[OK] {out}")
+
+        # Extraction PIP depuis la vidéo maskée (out) — le masque est déjà appliqué
+        if pip_bbox is not None:
+            cap_out = cv2.VideoCapture(out)
+            frame_w = int(cap_out.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_h = int(cap_out.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap_out.release()
+            extract_pip(out, src, pip_bbox, frame_w, frame_h)
+            os.remove(out)  # glitch ne voit que _pip.mp4, pas la vidéo maskée complète
+            print(f"[OK] pip → output0 | screen → output1")
 
 if __name__ == "__main__":
     main()

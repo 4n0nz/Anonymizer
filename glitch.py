@@ -40,10 +40,6 @@ def resize_frame(frame):
     scale = CFG.max_width / w
     return cv2.resize(frame, (int(w * scale), int(h * scale)))
 
-def mask_present(frame):
-    # Détection du marqueur vert laissé par face_mask.py
-    return frame[0:2, 0:2, 1].mean() > 200
-
 # ======================
 # VHS / CRT GLITCH CORE
 # ======================
@@ -117,8 +113,7 @@ def process_video(video_path, temp_out):
 
         frame = resize_frame(frame)
 
-        if mask_present(frame):
-            frame = apply_vhs_crt_glitch(frame, rng)
+        frame = apply_vhs_crt_glitch(frame, rng)
 
         out.write(frame)
 
