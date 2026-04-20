@@ -25,7 +25,7 @@ MARGIN       = C.MARGIN
 AUDIO_FADE   = C.AUDIO_FADE
 
 SCREEN_RATIO     = 0.904  # largeur screen / largeur background
-PIP_DISPLAY_RATIO = 0.40  # largeur PIP / largeur background (indépendant de la bbox)
+PIP_DISPLAY_RATIO = 0.36  # largeur PIP / largeur background (indépendant de la bbox)
 PIP_BORDER        = 4     # bordure blanche autour du PIP (px)
 OUTPUT_NAME       = "output.mp4"
 
@@ -92,8 +92,8 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     # --- Screen ---
     s_w = even(int(bg_w * SCREEN_RATIO))
     s_h = even(int(s_w * scr_h / scr_w))
-    s_x = 50
-    s_y = 50
+    s_x = 25
+    s_y = 25
 
     # --- PIP : taille fixe (ratio du bg) centré sur le carré noir ---
     scale_x = s_w / scr_w
@@ -105,9 +105,9 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
 
     b = PIP_BORDER
 
-    # PIP ancré à 150px du bord droit et du bas
-    p_x = bg_w - p_w - b*2 - 50
-    p_y = bg_h - p_h - b*2 - 50
+    # PIP ancré à 25px du bord droit et du bas
+    p_x = bg_w - p_w - b*2 - 25
+    p_y = bg_h - p_h - b*2 - 25
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
@@ -161,8 +161,8 @@ def compose_standalone(bg, src, out_tmp):
 
     s_w = even(int(bg_w * SCREEN_RATIO))
     s_h = even(int(s_w * src_h / src_w))
-    s_x = 50
-    s_y = 50
+    s_x = 25
+    s_y = 25
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
