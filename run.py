@@ -28,10 +28,12 @@ STEPS = [
 ]
 
 TEMP_DIRS = [
+    "output/.output0",
     "output/.output1",
     "output/.output2",
     "output/.output3",
     "output/.output4",
+    "output/.metadata",
 ]
 
 # Caracteres spinner : version Unicode (Linux) ou ASCII (Windows CMD)
