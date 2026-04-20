@@ -103,15 +103,11 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     p_w = even(int(bg_w * PIP_DISPLAY_RATIO))
     p_h = even(int(p_w * 9 / 16))  # toujours 16:9
 
-    # Centre du carré noir dans l'espace background
-    black_cx = s_x + int((meta["x"] + meta["w"] / 2) * scale_x)
-    black_cy = s_y + int((meta["y"] + meta["h"] / 2) * scale_y)
-
-    # Centrer le PIP sur ce point
-    p_x = black_cx - p_w // 2 + 180
-    p_y = black_cy - p_h // 2 + 250
-
     b = PIP_BORDER
+
+    # PIP ancré à 150px du bord droit et du bas
+    p_x = bg_w - p_w - b*2 - 150
+    p_y = bg_h - p_h - b*2 - 150
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
