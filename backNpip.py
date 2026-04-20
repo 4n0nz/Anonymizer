@@ -24,7 +24,7 @@ BACKGROUND   = C.BACKGROUND
 MARGIN       = C.MARGIN
 AUDIO_FADE   = C.AUDIO_FADE
 
-SCREEN_RATIO     = 0.715  # largeur screen / largeur background
+SCREEN_RATIO     = 0.822  # largeur screen / largeur background
 PIP_DISPLAY_RATIO = 0.40  # largeur PIP / largeur background (indépendant de la bbox)
 PIP_BORDER        = 4     # bordure blanche autour du PIP (px)
 OUTPUT_NAME       = "output.mp4"
@@ -106,8 +106,8 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     b = PIP_BORDER
 
     # PIP ancré à 150px du bord droit et du bas
-    p_x = bg_w - p_w - b*2 - 150
-    p_y = bg_h - p_h - b*2 - 150
+    p_x = bg_w - p_w - b*2 - 50
+    p_y = bg_h - p_h - b*2 - 50
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
