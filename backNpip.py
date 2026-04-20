@@ -24,8 +24,8 @@ BACKGROUND   = C.BACKGROUND
 MARGIN       = C.MARGIN
 AUDIO_FADE   = C.AUDIO_FADE
 
-SCREEN_RATIO     = 0.904  # largeur screen / largeur background
-PIP_DISPLAY_RATIO = 0.396  # largeur PIP / largeur background (indépendant de la bbox)
+SCREEN_RATIO     = 0.949  # largeur screen / largeur background
+PIP_DISPLAY_RATIO = 0.416  # largeur PIP / largeur background (indépendant de la bbox)
 PIP_BORDER        = 4     # bordure blanche autour du PIP (px)
 OUTPUT_NAME       = "output.mp4"
 
