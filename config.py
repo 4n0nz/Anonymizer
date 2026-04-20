@@ -52,7 +52,7 @@ MASK_SCALE     = 1.1    # Facteur d'agrandissement du masque (1.0 = original)
 # PIP EXTRACTION
 # ======================
 PIP_EXTRACT         = True   # Activer l'extraction PIP automatique
-PIP_MAX_FACE_RATIO  = 0.20   # Si visage < 20% de la largeur du frame → c'est un PIP
+PIP_MAX_FACE_RATIO  = 0.10   # Si visage < 10% de la largeur du frame → c'est un PIP
 PIP_PADDING         = 0.60   # Marge autour du PIP detecte (20%)
 
 # ======================
