@@ -95,21 +95,31 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     s_x = 25
     s_y = 25
 
-    # --- PIP : centré sur la position du personnage dans le screen ---
+    # --- PIP aligné sur la zone cropée pour couvrir 100% le personnage ---
     scale_x = s_w / scr_w
     scale_y = s_h / scr_h
 
-    # Taille du PIP — ratio fixe du background
-    p_w = even(int(bg_w * PIP_DISPLAY_RATIO))
-    p_h = even(int(p_w * 9 / 16))  # toujours 16:9
-
     b = PIP_BORDER
 
-    # PIP centré sur le visage (metadata) + décalage pour couvrir le corps
-    face_cx = s_x + int((meta["x"] + meta["w"] / 2) * scale_x)
-    face_cy = s_y + int((meta["y"] + meta["h"] / 2) * scale_y)
-    p_x = face_cx - p_w // 2 - b + 100
-    p_y = face_cy - p_h // 2 - b + 50
+    # Coordonnées metadata en espace 1280px → espace display
+    masked_w = min(scr_w, C.MAX_WIDTH)
+    masked_h = int(scr_h * masked_w / scr_w)
+
+    # Coin haut-gauche du crop dans l'espace display
+    crop_x = s_x + int(meta["x"] * s_w / masked_w)
+    crop_y = s_y + int(meta["y"] * s_h / masked_h)
+
+    # Taille du crop dans l'espace display
+    crop_display_w = int(meta["w"] * s_w / masked_w)
+    crop_display_h = int(meta["h"] * s_h / masked_h)
+
+    # PIP au moins aussi grand que le crop, avec marge de 20%
+    p_w = even(max(int(bg_w * PIP_DISPLAY_RATIO), int(crop_display_w * 1.2)))
+    p_h = even(int(p_w * 9 / 16))  # toujours 16:9
+
+    # Aligner le coin haut-gauche du PIP sur le coin haut-gauche du crop
+    p_x = crop_x - b
+    p_y = crop_y - b
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
