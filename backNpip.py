@@ -109,7 +109,7 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     face_cx = s_x + int((meta["x"] + meta["w"] / 2) * scale_x)
     face_cy = s_y + int((meta["y"] + meta["h"] / 2) * scale_y)
     p_x = face_cx - p_w // 2 - b + 100
-    p_y = face_cy - p_h // 2 - b + 150
+    p_y = face_cy - p_h // 2 - b + 50
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
