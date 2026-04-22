@@ -95,23 +95,19 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     s_x = 25
     s_y = 25
 
-    # --- PIP : centré sur la position du personnage dans le screen ---
+    # --- PIP : taille fixe (ratio du bg) centré sur le carré noir ---
     scale_x = s_w / scr_w
     scale_y = s_h / scr_h
 
-    # Taille du PIP — ratio fixe du background
+    # Taille du PIP indépendante de la bbox — ratio fixe du background
     p_w = even(int(bg_w * PIP_DISPLAY_RATIO))
     p_h = even(int(p_w * 9 / 16))  # toujours 16:9
 
     b = PIP_BORDER
 
-    # Centre du personnage dans l'espace background
-    person_cx = s_x + int((meta["x"] + meta["w"] / 2) * scale_x)
-    person_cy = s_y + int((meta["y"] + meta["h"] / 2) * scale_y)
-
-    # Centrer le PIP exactement sur le personnage
-    p_x = person_cx - p_w // 2 - b
-    p_y = person_cy - p_h // 2 - b
+    # PIP ancré à 25px du bord droit et du bas
+    p_x = bg_w - p_w - b*2 - 25
+    p_y = bg_h - p_h - b*2 - 25
 
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
