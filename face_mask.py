@@ -406,9 +406,9 @@ def extract_pip(masked_video, original_src, bbox, frame_w, frame_h):
 
     bx, by, bw, bh = bbox
 
-    # Centre du visage — décalé pour inclure les épaules
-    cx = bx + bw // 2 + 100
-    cy = by + bh // 2 + 150
+    # Centre du visage
+    cx = bx + bw // 2
+    cy = by + bh // 2
 
     # Padding autour de la zone webcam
     pad_x = int(bw * CFG.pip_padding)
