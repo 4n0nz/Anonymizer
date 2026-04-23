@@ -119,7 +119,7 @@ def cfg_write(key, value):
 
 
 # ======================
-# MENU
+# CONFIGURE
 # ======================
 
 SEP = "  " + "─" * 52
@@ -138,98 +138,47 @@ def print_ascii():
     print()
 
 
-def show_main_menu(active_steps):
-    while True:
-        clear()
-        print_ascii()
-        print(SEP)
-        print("  CONFIGURATION — Anonymous Video Pipeline")
-        print(SEP)
-        print()
-
-        # [P] Pipeline — étapes actives
-        steps_display = "  ".join(
-            f"{i+1}:{label[:3]}" for i, (label, _) in enumerate(STEPS)
-            if i in active_steps
-        )
-        skipped = [str(i+1) for i in range(len(STEPS)) if i not in active_steps]
-        skip_str = f"  (skip: {', '.join(skipped)})" if skipped else ""
-        print(f"  [P] Pipeline        {steps_display}{skip_str}")
-        print()
-
-        # Sections paramètres
-        for idx, (section, params) in enumerate(MENU_PARAMS[1:], 1):
-            print(f"  [{idx}] {section}")
-            for key, _, label in params:
-                val = cfg_read(key)
-                print(f"      {label:<35} = {val}")
-            print()
-
-        print(SEP)
-        print(f"  [↵]  Run pipeline")
-        print(f"  [q]  Quit")
-        print(SEP)
-        print()
-
-        choice = input("  Choice : ").strip().lower()
-
-        if choice == "":
-            return active_steps
-        elif choice == "q":
-            sys.exit(0)
-        elif choice == "p":
-            active_steps = menu_pipeline(active_steps)
-        else:
-            try:
-                idx = int(choice)
-                if 1 <= idx <= len(MENU_PARAMS) - 1:
-                    menu_section(MENU_PARAMS[idx])
-            except ValueError:
-                pass
-
-
-def menu_pipeline(active_steps):
+def configure():
+    """Linear one-by-one questionnaire. Returns active_steps set."""
     clear()
     print_ascii()
     print(SEP)
-    print("  PIPELINE — Active steps")
+    print("  CONFIGURATION — press ↵ to keep the current value")
     print(SEP)
     print()
-    for i, (label, _) in enumerate(STEPS):
-        status = OK if i in active_steps else SKP
-        print(f"  [{status}] {i+1}. {label}")
+
+    # --- Parameters ---
+    for _section, params in MENU_PARAMS[1:]:   # skip Pipeline section
+        for key, typ, label in params:
+            current = cfg_read(key)
+            raw = input(f"  {label} [{current}] : ").strip()
+            if raw:
+                try:
+                    val = typ(raw)
+                    cfg_write(key, val)
+                    print(f"  {OK} saved → {key} = {val}")
+                except ValueError:
+                    print(f"  {ERR} Invalid value — keeping {current}")
+
+    # --- Pipeline steps ---
     print()
-    raw = input("  Steps to enable (e.g. 1 2 3 4 5 6) [↵ = all] : ").strip()
+    print(SEP)
+    print("  PIPELINE STEPS")
+    print(SEP)
+    for i, (label, _) in enumerate(STEPS):
+        print(f"    {i+1}. {label}")
+    print()
+    raw = input("  Steps to run (e.g. 1 2 3 4 5 6) [↵ = all] : ").strip()
     if raw:
         try:
-            return set(int(x) - 1 for x in raw.split() if 1 <= int(x) <= len(STEPS))
+            active = set(int(x) - 1 for x in raw.split() if 1 <= int(x) <= len(STEPS))
         except ValueError:
-            pass
-    return set(range(len(STEPS)))
+            active = set(range(len(STEPS)))
+    else:
+        active = set(range(len(STEPS)))
 
-
-def menu_section(section_data):
-    section_name, params = section_data
-    clear()
-    print_ascii()
-    print(SEP)
-    print(f"  {section_name.upper()}")
-    print(SEP)
     print()
-    print("  Press ↵ to keep current value.")
-    print()
-    for key, typ, label in params:
-        current = cfg_read(key)
-        raw = input(f"  {label} [{current}] : ").strip()
-        if raw:
-            try:
-                val = typ(raw)
-                cfg_write(key, val)
-                print(f"  {OK} {key} = {val}")
-            except ValueError:
-                print(f"  {ERR} Invalid value — ignored")
-    print()
-    input(f"  [↵] Back to menu...")
+    return active
 
 
 # ======================
@@ -361,8 +310,8 @@ def cleanup():
 # ======================
 
 def main():
-    # Menu de configuration
-    active_steps = show_main_menu(set(range(len(STEPS))))
+    # Linear configuration questionnaire
+    active_steps = configure()
 
     clear()
     print_header(active_steps)
