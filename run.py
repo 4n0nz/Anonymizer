@@ -9,9 +9,9 @@ Usage : python run.py   ou   python3 run.py
 import subprocess
 import sys
 import os
+import re
 import glob
 import time
-import threading
 from datetime import datetime
 
 # ======================
@@ -41,39 +41,196 @@ if sys.platform == "win32":
     SPINNER = ["|", "/", "-", "\\"]
     OK  = "[OK]"
     ERR = "[ERREUR]"
+    SKP = "[SKIP]"
     BAR_FULL  = "#"
     BAR_EMPTY = "-"
 else:
     SPINNER = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
     OK  = "✓"
     ERR = "✗"
+    SKP = "⊘"
     BAR_FULL  = "█"
     BAR_EMPTY = "░"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config.py")
+LOGS_DIR    = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
-RUN_LOG  = os.path.join(LOGS_DIR, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".log")
+RUN_LOG = os.path.join(LOGS_DIR, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".log")
 
 # ======================
 # PYTHON EXECUTABLE
 # ======================
 
 def find_python():
-    """Utilise le Python du virtualenv mask_env si disponible,
-    sinon le Python courant (sys.executable)."""
     candidates = [
-        os.path.join(BASE_DIR, "mask_env", "bin", "python"),         # Linux / Mac
-        os.path.join(BASE_DIR, "mask_env", "Scripts", "python.exe"), # Windows
-        os.path.join(BASE_DIR, "Win",      "mask_env", "Scripts", "python.exe"), # Win/mask_env
+        os.path.join(BASE_DIR, "mask_env", "bin", "python"),
+        os.path.join(BASE_DIR, "mask_env", "Scripts", "python.exe"),
+        os.path.join(BASE_DIR, "Win", "mask_env", "Scripts", "python.exe"),
     ]
     for path in candidates:
         if os.path.isfile(path):
             return path
-    return sys.executable  # fallback : Python courant
+    return sys.executable
 
 PYTHON      = find_python()
 LABEL_WIDTH = max(len(label) for label, _ in STEPS)
+
+# ======================
+# CONFIG READ / WRITE
+# ======================
+
+MENU_PARAMS = [
+    ("Pipeline",      []),   # special section — handled separately
+    ("Detection",     [
+        ("PIP_MAX_FACE_RATIO", float, "PIP threshold (face/frame ratio)"),
+        ("MASK_SCALE",         float, "Mask size (1.0 = original)"),
+    ]),
+    ("Glitch / CRT",  [
+        ("GLITCH_INTENSITY",   int,   "Glitch intensity"),
+    ]),
+    ("Audio",         [
+        ("PITCH_UP",           float, "Pitch up"),
+        ("PITCH_DOWN",         float, "Pitch down"),
+    ]),
+    ("Composition",   [
+        ("SCREEN_RATIO",       float, "Screen width / background"),
+        ("PIP_DISPLAY_RATIO",  float, "PIP width / background"),
+    ]),
+]
+
+
+def cfg_read(key):
+    with open(CONFIG_PATH) as f:
+        m = re.search(rf'^{key}\s*=\s*([^\s#]+)', f.read(), re.MULTILINE)
+    return m.group(1) if m else "?"
+
+
+def cfg_write(key, value):
+    with open(CONFIG_PATH) as f:
+        content = f.read()
+    content = re.sub(
+        rf'^({key}\s*=\s*)([^\s#]+)',
+        rf'\g<1>{value}',
+        content, flags=re.MULTILINE
+    )
+    with open(CONFIG_PATH, "w") as f:
+        f.write(content)
+
+
+# ======================
+# MENU
+# ======================
+
+SEP = "  " + "─" * 52
+
+
+def clear():
+    os.system("cls" if sys.platform == "win32" else "clear")
+
+
+def print_ascii():
+    print()
+    print("  ╔═╗ ╔╗╔ ╔═╗ ╔╗╔ ╦ ╦ ╔╦╗ ╦ ══╗ ╔══ ╔═╗")
+    print("  ╠═╣ ║║║ ║ ║ ║║║ ╚╦╝ ║║║ ║  ╱  ╠═  ╠╦╝")
+    print("  ╩ ╩ ╝╚╝ ╚═╝ ╝╚╝  ╩  ╩ ╩ ╩ ╚══ ╚══ ╩╚═")
+    print("       Anonymous Video Pipeline")
+    print()
+
+
+def show_main_menu(active_steps):
+    while True:
+        clear()
+        print_ascii()
+        print(SEP)
+        print("  CONFIGURATION — Anonymous Video Pipeline")
+        print(SEP)
+        print()
+
+        # [P] Pipeline — étapes actives
+        steps_display = "  ".join(
+            f"{i+1}:{label[:3]}" for i, (label, _) in enumerate(STEPS)
+            if i in active_steps
+        )
+        skipped = [str(i+1) for i in range(len(STEPS)) if i not in active_steps]
+        skip_str = f"  (skip: {', '.join(skipped)})" if skipped else ""
+        print(f"  [P] Pipeline        {steps_display}{skip_str}")
+        print()
+
+        # Sections paramètres
+        for idx, (section, params) in enumerate(MENU_PARAMS[1:], 1):
+            print(f"  [{idx}] {section}")
+            for key, _, label in params:
+                val = cfg_read(key)
+                print(f"      {label:<35} = {val}")
+            print()
+
+        print(SEP)
+        print(f"  [↵]  Run pipeline")
+        print(f"  [q]  Quit")
+        print(SEP)
+        print()
+
+        choice = input("  Choice : ").strip().lower()
+
+        if choice == "":
+            return active_steps
+        elif choice == "q":
+            sys.exit(0)
+        elif choice == "p":
+            active_steps = menu_pipeline(active_steps)
+        else:
+            try:
+                idx = int(choice)
+                if 1 <= idx <= len(MENU_PARAMS) - 1:
+                    menu_section(MENU_PARAMS[idx])
+            except ValueError:
+                pass
+
+
+def menu_pipeline(active_steps):
+    clear()
+    print_ascii()
+    print(SEP)
+    print("  PIPELINE — Active steps")
+    print(SEP)
+    print()
+    for i, (label, _) in enumerate(STEPS):
+        status = OK if i in active_steps else SKP
+        print(f"  [{status}] {i+1}. {label}")
+    print()
+    raw = input("  Steps to enable (e.g. 1 2 3 4 5 6) [↵ = all] : ").strip()
+    if raw:
+        try:
+            return set(int(x) - 1 for x in raw.split() if 1 <= int(x) <= len(STEPS))
+        except ValueError:
+            pass
+    return set(range(len(STEPS)))
+
+
+def menu_section(section_data):
+    section_name, params = section_data
+    clear()
+    print_ascii()
+    print(SEP)
+    print(f"  {section_name.upper()}")
+    print(SEP)
+    print()
+    print("  Press ↵ to keep current value.")
+    print()
+    for key, typ, label in params:
+        current = cfg_read(key)
+        raw = input(f"  {label} [{current}] : ").strip()
+        if raw:
+            try:
+                val = typ(raw)
+                cfg_write(key, val)
+                print(f"  {OK} {key} = {val}")
+            except ValueError:
+                print(f"  {ERR} Invalid value — ignored")
+    print()
+    input(f"  [↵] Back to menu...")
+
 
 # ======================
 # UTILS
@@ -91,7 +248,7 @@ def format_time(seconds):
     return f"{m:02d}:{s:02d}"
 
 
-def print_header():
+def print_header(active_steps):
     print()
     print("  ╔═╗ ╔╗╔ ╔═╗ ╔╗╔ ╦ ╦ ╔╦╗ ╦ ══╗ ╔══ ╔═╗")
     print("  ╠═╣ ║║║ ║ ║ ║║║ ╚╦╝ ║║║ ║  ╱  ╠═  ╠╦╝")
@@ -101,7 +258,7 @@ def print_header():
     print("=" * 54)
     print(f"  Scripts : {BASE_DIR}")
     print(f"  Python  : {PYTHON}")
-    print(f"  Phases  : {len(STEPS)}")
+    print(f"  Phases  : {len(active_steps)}/{len(STEPS)} actives")
     print(f"  Log     : {RUN_LOG}")
     print("=" * 54)
     print()
@@ -120,16 +277,12 @@ def print_footer(total_time):
 # ======================
 
 def run_step(label, script, step_num, total_steps):
-    """Lance un script Python, affiche un spinner + chrono.
-    Retourne True si succes, False si erreur."""
-
     script_path = os.path.join(BASE_DIR, script)
 
     if not os.path.isfile(script_path):
         print(f"  {ERR} Script introuvable : {script}")
         return False
 
-    # Lancement du process
     start = time.time()
 
     with open(RUN_LOG, "a") as log_file:
@@ -146,7 +299,6 @@ def run_step(label, script, step_num, total_steps):
         text=True
     )
 
-    # Spinner — meme ligne que le resultat final (pas de print initial)
     spin_i = 0
     while proc.poll() is None:
         elapsed = time.time() - start
@@ -156,7 +308,7 @@ def run_step(label, script, step_num, total_steps):
         spin_i += 1
         time.sleep(0.15)
 
-    elapsed   = time.time() - start
+    elapsed    = time.time() - start
     returncode = proc.returncode
 
     with open(RUN_LOG, "a") as log_file:
@@ -173,7 +325,6 @@ def run_step(label, script, step_num, total_steps):
         print(f"  {'='*50}")
         print(f"  Erreur dans : {script}")
         print(f"  {'='*50}")
-        # Affiche les dernieres lignes du log
         try:
             with open(RUN_LOG) as f:
                 lines = f.readlines()
@@ -210,17 +361,27 @@ def cleanup():
 # ======================
 
 def main():
-    print_header()
+    # Menu de configuration
+    active_steps = show_main_menu(set(range(len(STEPS))))
+
+    clear()
+    print_header(active_steps)
 
     pipeline_start = time.time()
-    total = len(STEPS)
+    total_active   = len(active_steps)
+    step_counter   = 0
 
-    for i, (label, script) in enumerate(STEPS, 1):
-        success = run_step(label, script, i, total)
+    for i, (label, script) in enumerate(STEPS):
+        if i not in active_steps:
+            print(f"  {'░'*30}  [{i+1}/{len(STEPS)}] {label:<{LABEL_WIDTH}}  {SKP}")
+            continue
+
+        step_counter += 1
+        success = run_step(label, script, step_counter, total_active)
 
         if not success:
             print()
-            print(f"  Pipeline arrete a l'etape {i}/{total} — {label}")
+            print(f"  Pipeline arrete a l'etape {i+1}/{len(STEPS)} — {label}")
             print(f"  Les etapes suivantes n'ont pas ete executees.")
             sys.exit(1)
 
@@ -230,7 +391,6 @@ def main():
 
 
 def restore_terminal():
-    """Restaure les parametres du terminal sur Linux/Mac (apres tqdm/cv2)."""
     if sys.platform != "win32":
         subprocess.call(["stty", "sane"], stderr=subprocess.DEVNULL)
 
