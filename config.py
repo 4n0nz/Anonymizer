@@ -77,8 +77,9 @@ AUDIO_BITRATE  = "192k"
 # ======================
 # BACKGROUND & PIP
 # ======================
-MARGIN    = 80
-PIP_SCALE = 1.25
-POP       = 0.3
-FADE      = 0.3
-AUDIO_FADE = 0.3
+MARGIN      = 80
+PIP_SCALE   = 1.25
+POP         = 0.3
+FADE        = 0.3
+AUDIO_FADE  = 0.3
+SCREEN_DELAY = 3.0  # secondes supprimées au début du screen (décalage vs pip)
