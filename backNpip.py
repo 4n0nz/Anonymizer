@@ -23,6 +23,8 @@ META_DIR     = C.DIRS["metadata"]
 BACKGROUND   = C.BACKGROUND
 MARGIN       = C.MARGIN
 AUDIO_FADE   = C.AUDIO_FADE
+PIP_START    = 2   # secondes avant que le pip apparaisse
+SCREEN_START = 5   # secondes avant que le screen apparaisse
 
 SCREEN_RATIO     = 0.854  # largeur screen / largeur background
 PIP_DISPLAY_RATIO = 0.416  # largeur PIP / largeur background (indépendant de la bbox)
@@ -87,7 +89,7 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     """
     bg_w,  bg_h  = get_resolution(bg)
     scr_w, scr_h = get_resolution(screen)
-    dur          = get_duration(screen)
+    dur          = max(get_duration(screen), get_duration(pip_vid))
 
     # --- Screen ---
     s_w = even(int(bg_w * SCREEN_RATIO))
@@ -126,8 +128,8 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
         f"[1:v]scale={s_w}:{s_h},setsar=1[scr];"
         f"[2:v]scale={p_w}:{p_h},setsar=1,"
         f"pad={p_w + b*2}:{p_h + b*2}:{b}:{b}:0x00ff00[pip];"
-        f"[bg][scr]overlay={s_x}:{s_y}[tmp];"
-        f"[tmp][pip]overlay={p_x - b}:{p_y - b}[outv]"
+        f"[bg][scr]overlay={s_x}:{s_y}:enable='gte(t,{SCREEN_START})'[tmp];"
+        f"[tmp][pip]overlay={p_x - b}:{p_y - b}:enable='gte(t,{PIP_START})'[outv]"
     )
 
     audio_scr = has_audio(screen)
