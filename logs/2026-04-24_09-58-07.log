@@ -1,9 +1,0 @@
-
-============================================================
-[09:58:13] STEP 1/6 — Mask face
-============================================================
-Traceback (most recent call last):
-  File "C:\Users\p4tzr1ot\Desktop\Anonymizer\face_mask.py", line 4, in <module>
-    import cv2
-ModuleNotFoundError: No module named 'cv2'
-[09:58:13] ECHEC — Mask face (00:00)
