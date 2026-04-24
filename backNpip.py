@@ -142,9 +142,18 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     audio_scr = has_audio(screen)
     audio_pip = has_audio(pip_vid)
 
-    # Audio : pip uniquement, screen ignoré
-    if audio_pip:
+    if audio_scr and audio_pip:
+        filter_complex += (
+            f";[1:a]adelay={scr_delay_ms}:all=1[scr_a]"
+            f";[2:a]adelay={pip_delay_ms}:all=1[pip_a]"
+            f";[scr_a][pip_a]amix=inputs=2:normalize=1[aout]"
+        )
+        audio_args = ["-map", "[aout]", "-c:a", "aac"]
+    elif audio_pip:
         filter_complex += f";[2:a]adelay={pip_delay_ms}:all=1[aout]"
+        audio_args = ["-map", "[aout]", "-c:a", "aac"]
+    elif audio_scr:
+        filter_complex += f";[1:a]adelay={scr_delay_ms}:all=1[aout]"
         audio_args = ["-map", "[aout]", "-c:a", "aac"]
     else:
         audio_args = ["-an"]

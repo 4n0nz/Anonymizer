@@ -81,6 +81,12 @@ def process_video(job):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Screen : retirer l'audio complètement
+        if input_video.name.endswith("_screen.mp4"):
+            log.info(f"Screen → strip audio: {input_video.name}")
+            run(["ffmpeg", "-y", "-i", str(input_video), "-c:v", "copy", "-an", str(output_video)])
+            return f"{output_video.name} (audio stripped)"
+
         if not has_audio(input_video):
             log.info(f"No audio → copy: {input_video.name}")
             run(["ffmpeg", "-y", "-i", str(input_video), "-c", "copy", str(output_video)])
