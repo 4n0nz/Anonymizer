@@ -125,25 +125,27 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     p_x = crop_x - b
     p_y = crop_y - b
 
+    scr_delay_ms = int(SCREEN_START * 1000)
+    pip_delay_ms = int(PIP_START * 1000)
+
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
-        f"[1:v]scale={s_w}:{s_h},setsar=1[scr];"
+        # setpts décale le stream → il commence vraiment à t=SCREEN_START
+        f"[1:v]scale={s_w}:{s_h},setsar=1,setpts=PTS+{SCREEN_START}/TB[scr];"
         f"[2:v]scale={p_w}:{p_h},setsar=1,"
-        f"pad={p_w + b*2}:{p_h + b*2}:{b}:{b}:0x00ff00[pip];"
-        f"[bg][scr]overlay={s_x}:{s_y}:enable='between(t,{SCREEN_START},{scr_dur})'[tmp];"
-        f"[tmp][pip]overlay={p_x - b}:{p_y - b}:enable='between(t,{PIP_START},{pip_dur})'[outv]"
+        f"pad={p_w + b*2}:{p_h + b*2}:{b}:{b}:0x00ff00,"
+        f"setpts=PTS+{PIP_START}/TB[pip];"
+        f"[bg][scr]overlay={s_x}:{s_y}:eof_action=pass[tmp];"
+        f"[tmp][pip]overlay={p_x - b}:{p_y - b}:eof_action=pass[outv]"
     )
 
     audio_scr = has_audio(screen)
     audio_pip = has_audio(pip_vid)
 
-    if audio_scr and audio_pip:
-        filter_complex += f";[1:a][2:a]amix=inputs=2:normalize=1[aout]"
+    # Audio : pip uniquement, screen ignoré
+    if audio_pip:
+        filter_complex += f";[2:a]adelay={pip_delay_ms}:all=1[aout]"
         audio_args = ["-map", "[aout]", "-c:a", "aac"]
-    elif audio_scr:
-        audio_args = ["-map", "1:a", "-c:a", "aac"]
-    elif audio_pip:
-        audio_args = ["-map", "2:a", "-c:a", "aac"]
     else:
         audio_args = ["-an"]
 
