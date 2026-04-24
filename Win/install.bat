@@ -8,7 +8,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERREUR] Python introuvable.
     echo Installez Python depuis https://www.python.org/downloads/
-    echo Cochez bien "Add Python to PATH" lors de l'installation.
+    echo Choisissez Windows installer 64-bit et cochez Add Python to PATH.
     pause
     exit /b 1
 )
@@ -20,22 +20,21 @@ ffmpeg -version >nul 2>&1
 if errorlevel 1 (
     echo [ATTENTION] ffmpeg introuvable dans le PATH.
     echo Installez ffmpeg depuis https://ffmpeg.org/download.html
-    echo et ajoutez le dossier bin\ a votre variable d environnement PATH.
-    echo.
-    echo Continuez quand meme ?
     pause
 ) else (
     echo [OK] ffmpeg detecte
 )
 
-:: Creation du virtualenv
-if not exist mask_env (
+:: Creation du virtualenv (si absent)
+if not exist mask_env\Scripts\python.exe (
     echo.
     echo Creation du virtualenv...
     python -m venv mask_env
     if errorlevel 1 ( echo [ERREUR] Creation virtualenv echouee & pause & exit /b 1 )
+    echo [OK] Virtualenv cree
+) else (
+    echo [OK] Virtualenv existant
 )
-echo [OK] Virtualenv pret
 
 :: Activation
 call mask_env\Scripts\activate.bat
@@ -54,18 +53,22 @@ if errorlevel 1 ( echo [ERREUR] Installation des dependances echouee & pause & e
 :: Verification finale
 echo.
 echo Verification des imports...
-python -c "import cv2, numpy, mediapipe, tqdm; print('[OK] OpenCV :', cv2.__version__); print('[OK] NumPy :', numpy.__version__); print('[OK] MediaPipe OK'); print('[OK] tqdm OK')"
+python -c "import cv2, numpy, mediapipe, tqdm; print(chr(91)+chr(79)+chr(75)+chr(93)+chr(32)+chr(79)+chr(112)+chr(101)+chr(110)+chr(67)+chr(86)+chr(32)+cv2.__version__)"
 if errorlevel 1 ( echo [ERREUR] Un import a echoue & pause & exit /b 1 )
 
 :: Extraction des ressources (7-Zip)
 if exist "..\resources\resources.7z.001" (
     echo.
     echo Extraction des ressources...
-    where 7z >nul 2>&1
-    if errorlevel 1 (
+    set "SEVENZIP="
+    where 7z >nul 2>&1 && set "SEVENZIP=7z"
+    if exist "C:\Program Files\7-Zip\7z.exe" set "SEVENZIP=C:\Program Files\7-Zip\7z.exe"
+    if "%SEVENZIP%"=="" (
         echo [ATTENTION] 7-Zip introuvable. Installez-le depuis https://www.7-zip.org/
+        echo et relancez install.bat
     ) else (
-        7z x "..\resources\resources.7z.001" -o"..\resources" -y
+        "%SEVENZIP%" x "..\resources\resources.7z.001" -o"..\resources" -y
+        if errorlevel 1 ( echo [ERREUR] Extraction echouee & pause & exit /b 1 )
         del "..\resources\resources.7z.*" 2>nul
         echo [OK] Ressources extraites
     )
