@@ -89,7 +89,9 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     """
     bg_w,  bg_h  = get_resolution(bg)
     scr_w, scr_h = get_resolution(screen)
-    dur          = max(get_duration(screen), get_duration(pip_vid))
+    scr_dur      = get_duration(screen)
+    pip_dur      = get_duration(pip_vid)
+    dur          = max(scr_dur, pip_dur)
 
     # --- Screen ---
     s_w = even(int(bg_w * SCREEN_RATIO))
@@ -128,8 +130,8 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
         f"[1:v]scale={s_w}:{s_h},setsar=1[scr];"
         f"[2:v]scale={p_w}:{p_h},setsar=1,"
         f"pad={p_w + b*2}:{p_h + b*2}:{b}:{b}:0x00ff00[pip];"
-        f"[bg][scr]overlay={s_x}:{s_y}:enable='gte(t,{SCREEN_START})'[tmp];"
-        f"[tmp][pip]overlay={p_x - b}:{p_y - b}:enable='gte(t,{PIP_START})'[outv]"
+        f"[bg][scr]overlay={s_x}:{s_y}:enable='between(t,{SCREEN_START},{scr_dur})'[tmp];"
+        f"[tmp][pip]overlay={p_x - b}:{p_y - b}:enable='between(t,{PIP_START},{pip_dur})'[outv]"
     )
 
     audio_scr = has_audio(screen)
@@ -181,7 +183,7 @@ def compose_standalone(bg, src, out_tmp):
     filter_complex = (
         f"[0:v]loop=-1:size=32767,trim=0:{dur},setpts=PTS-STARTPTS[bg];"
         f"[1:v]scale={s_w}:{s_h},setsar=1[src];"
-        f"[bg][src]overlay={s_x}:{s_y}[outv]"
+        f"[bg][src]overlay={s_x}:{s_y}:enable='between(t,0,{dur})'[outv]"
     )
 
     audio_args = (["-map", "1:a", "-c:a", "aac"] if has_audio(src) else ["-an"])

@@ -45,7 +45,8 @@ def main():
         width, height = get_resolution(input_video)
 
         if is_screen and SCREEN_DELAY > 0:
-            # Trim les N premières secondes du screen pour créer le décalage vs pip
+            # 1) Trim les N premières secondes du screen
+            # 2) Ensuite seulement, pipintro est ajouté devant
             filter_complex = (
                 f"[0:v]scale={width}:{height},setsar=1[intro];"
                 f"[1:v]trim=start={SCREEN_DELAY},setpts=PTS-STARTPTS,"
