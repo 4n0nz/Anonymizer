@@ -24,7 +24,7 @@ BACKGROUND   = C.BACKGROUND
 MARGIN       = C.MARGIN
 AUDIO_FADE   = C.AUDIO_FADE
 PIP_START    = 2   # secondes avant que le pip apparaisse
-SCREEN_START = 5   # secondes avant que le screen apparaisse
+SCREEN_START = 7   # secondes avant que le screen apparaisse
 
 SCREEN_RATIO     = 0.854  # largeur screen / largeur background
 PIP_DISPLAY_RATIO = 0.416  # largeur PIP / largeur background (indépendant de la bbox)
