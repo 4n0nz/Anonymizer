@@ -21,6 +21,15 @@ def get_resolution(video):
     width, height = map(int, result.stdout.strip().split(","))
     return width, height
 
+def has_audio(video):
+    cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "a",
+        "-show_entries", "stream=index",
+        "-of", "csv=p=0", video
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
 def main():
     if not os.path.isfile(INTRO) or not os.path.isfile(OUTRO):
         print("Fichiers intro ou outro introuvables")
@@ -44,24 +53,50 @@ def main():
 
         width, height = get_resolution(input_video)
 
+        audio = has_audio(input_video)
+
         if is_screen and SCREEN_DELAY > 0:
             # 1) Trim les N premières secondes du screen
             # 2) Ensuite seulement, pipintro est ajouté devant
-            filter_complex = (
-                f"[0:v]scale={width}:{height},setsar=1[intro];"
-                f"[1:v]trim=start={SCREEN_DELAY},setpts=PTS-STARTPTS,"
-                f"scale={width}:{height},setsar=1[main];"
-                f"[1:a]atrim=start={SCREEN_DELAY},asetpts=PTS-STARTPTS[maina];"
-                f"[2:v]scale={width}:{height},setsar=1[outro];"
-                "[intro][0:a][main][maina][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
-            )
+            if audio:
+                filter_complex = (
+                    f"[0:v]scale={width}:{height},setsar=1[intro];"
+                    f"[1:v]trim=start={SCREEN_DELAY},setpts=PTS-STARTPTS,"
+                    f"scale={width}:{height},setsar=1[main];"
+                    f"[1:a]atrim=start={SCREEN_DELAY},asetpts=PTS-STARTPTS[maina];"
+                    f"[2:v]scale={width}:{height},setsar=1[outro];"
+                    "[intro][0:a][main][maina][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
+                )
+            else:
+                # Screen sans audio (retiré dans audio.py)
+                filter_complex = (
+                    f"[0:v]scale={width}:{height},setsar=1[intro];"
+                    f"[1:v]trim=start={SCREEN_DELAY},setpts=PTS-STARTPTS,"
+                    f"scale={width}:{height},setsar=1[main];"
+                    f"[2:v]scale={width}:{height},setsar=1[outro];"
+                    "[intro][main][outro]concat=n=3:v=1:a=0[outv]"
+                )
         else:
-            filter_complex = (
-                f"[0:v]scale={width}:{height},setsar=1[intro];"
-                f"[1:v]scale={width}:{height},setsar=1[main];"
-                f"[2:v]scale={width}:{height},setsar=1[outro];"
-                "[intro][0:a][main][1:a][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
-            )
+            if audio:
+                filter_complex = (
+                    f"[0:v]scale={width}:{height},setsar=1[intro];"
+                    f"[1:v]scale={width}:{height},setsar=1[main];"
+                    f"[2:v]scale={width}:{height},setsar=1[outro];"
+                    "[intro][0:a][main][1:a][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
+                )
+            else:
+                filter_complex = (
+                    f"[0:v]scale={width}:{height},setsar=1[intro];"
+                    f"[1:v]scale={width}:{height},setsar=1[main];"
+                    f"[2:v]scale={width}:{height},setsar=1[outro];"
+                    "[intro][main][outro]concat=n=3:v=1:a=0[outv]"
+                )
+
+        maps = ["-map", "[outv]"]
+        if audio:
+            maps += ["-map", "[outa]", "-c:a", "aac"]
+        else:
+            maps += ["-an"]
 
         cmd = [
             "ffmpeg", "-y",
@@ -69,12 +104,10 @@ def main():
             "-i", input_video,
             "-i", OUTRO,
             "-filter_complex", filter_complex,
-            "-map", "[outv]",
-            "-map", "[outa]",
+            *maps,
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "18",
-            "-c:a", "aac",
             "-movflags", "+faststart",
             output_video
         ]
