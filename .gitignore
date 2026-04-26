@@ -1,0 +1,16 @@
+# Identifiants OpenClassrooms — ne jamais pousser
+ocr_credentials.py
+
+# Cookies exportés manuellement
+ocr_cookies.txt
+*.cookies.txt
+
+# Vidéos téléchargées
+OCR_courses/
+
+# Fichiers temporaires pipeline
+output/
+input/
+__pycache__/
+*.pyc
+.env
