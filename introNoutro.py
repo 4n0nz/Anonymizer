@@ -30,6 +30,15 @@ def has_audio(video):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return bool(result.stdout.strip())
 
+def get_duration(video):
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0", video
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return float(result.stdout.strip())
+
 def main():
     if not os.path.isfile(INTRO) or not os.path.isfile(OUTRO):
         print("Fichiers intro ou outro introuvables")
@@ -68,13 +77,16 @@ def main():
                     "[intro][0:a][main][maina][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
                 )
             else:
-                # Screen sans audio (retiré dans audio.py)
+                # Screen sans audio : silence généré pour le segment screen
+                # pipintro et pipoutro conservent leur audio
+                screen_dur = round(get_duration(input_video) - SCREEN_DELAY, 3)
                 filter_complex = (
                     f"[0:v]scale={width}:{height},setsar=1[intro];"
                     f"[1:v]trim=start={SCREEN_DELAY},setpts=PTS-STARTPTS,"
                     f"scale={width}:{height},setsar=1[main];"
                     f"[2:v]scale={width}:{height},setsar=1[outro];"
-                    "[intro][main][outro]concat=n=3:v=1:a=0[outv]"
+                    f"anullsrc=r=44100:cl=stereo,atrim=duration={screen_dur}[silent];"
+                    "[intro][0:a][main][silent][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
                 )
         else:
             if audio:
@@ -85,18 +97,16 @@ def main():
                     "[intro][0:a][main][1:a][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
                 )
             else:
+                screen_dur = round(get_duration(input_video), 3)
                 filter_complex = (
                     f"[0:v]scale={width}:{height},setsar=1[intro];"
                     f"[1:v]scale={width}:{height},setsar=1[main];"
                     f"[2:v]scale={width}:{height},setsar=1[outro];"
-                    "[intro][main][outro]concat=n=3:v=1:a=0[outv]"
+                    f"anullsrc=r=44100:cl=stereo,atrim=duration={screen_dur}[silent];"
+                    "[intro][0:a][main][silent][outro][2:a]concat=n=3:v=1:a=1[outv][outa]"
                 )
 
-        maps = ["-map", "[outv]"]
-        if audio:
-            maps += ["-map", "[outa]", "-c:a", "aac"]
-        else:
-            maps += ["-an"]
+        maps = ["-map", "[outv]", "-map", "[outa]", "-c:a", "aac"]
 
         cmd = [
             "ffmpeg", "-y",
