@@ -91,7 +91,7 @@ def compose_screen_pip(bg, screen, pip_vid, meta, out_tmp):
     scr_w, scr_h = get_resolution(screen)
     scr_dur      = get_duration(screen)
     pip_dur      = get_duration(pip_vid)
-    dur          = max(scr_dur, pip_dur)
+    dur          = max(SCREEN_START + scr_dur, PIP_START + pip_dur)
 
     # --- Screen ---
     s_w = even(int(bg_w * SCREEN_RATIO))
