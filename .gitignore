@@ -14,3 +14,11 @@ input/
 __pycache__/
 *.pyc
 .env
+
+# Claude — config locale et mémoire persistante
+.claude/
+CLAUDE.md
+
+# Logs et debug
+logs/
+debug_output.txt
