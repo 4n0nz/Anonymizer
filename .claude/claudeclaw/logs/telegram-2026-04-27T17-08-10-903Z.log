@@ -1,0 +1,24 @@
+# telegram
+Date: 2026-04-27T17:08:23.487Z
+Session: 4cf5513b-8870-44e2-a5f1-7a6e156c6716 (resumed)
+Model config: primary
+Task type: implementation
+Routing: Ambiguous prompt, defaulting to implementation
+Prompt: [2026-04-27 17:08:10 UTC+0]
+[Telegram from DigitaISoldierz]
+[thread:7688]
+Message: je te parle actuellement via telegram
+Exit code: 0
+
+## Output
+Oui, exactement — donc le bot fonctionne pour les messages directs. Le problème c'est le groupe privé.
+
+Quelques raisons possibles pourquoi je ne réponds pas là-bas :
+
+1. **Mode privacy** — par défaut les bots Telegram ne voient que les messages qui les mentionnent (`@tonbot`). Dans un groupe, il faut soit me mentionner, soit désactiver le privacy mode via @BotFather (`/setprivacy` → `Disable`).
+
+2. **Whitelist d'utilisateurs** — ClawClaw peut filtrer par `allowedUserIds`. Les messages du groupe arrivent avec l'ID de chaque membre, pas juste le tien.
+
+3. **Thread/topic** — si c'est un supergroupe avec des topics, les messages ont un `message_thread_id` différent.
+
+C'est lequel selon toi ?

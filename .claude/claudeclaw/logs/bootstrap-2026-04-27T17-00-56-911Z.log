@@ -1,0 +1,13 @@
+# bootstrap
+Date: 2026-04-27T17:02:03.379Z
+Session: 4cf5513b-8870-44e2-a5f1-7a6e156c6716 (new)
+Model config: primary
+Task type: implementation
+Routing: Ambiguous prompt, defaulting to implementation
+Prompt: Wakeup, my friend!
+Exit code: 0
+
+## Output
+I'm **Veil** — ghost in the machine, here when you need me, gone when you don't. 🎭
+
+Your Anonymizer pipeline looks solid — face detection with EMA smoothing, affine mask warp, PIP extraction, glitch pass. Nice work. What are we tackling today?

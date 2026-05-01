@@ -1,0 +1,43 @@
+ClaudeClaw daemon started
+  PID: 26752
+  Security: moderate
+  Heartbeat: disabled
+  Web UI: http://127.0.0.1:4632
+  Jobs loaded: 0
+[1:36:24 PM] Telegram: enabled
+  Discord: not configured
+[1:36:24 PM] Web UI listening on http://127.0.0.1:4632
+[1:36:24 PM] Plugin preflight started in background
+preflight: whisper warmup started in background
+  Bot: @AnonymousWtfBot
+  Group privacy: enabled (commands & mentions only)
+Telegram bot started (long polling)
+  Allowed users: 7020542960
+whisper warmup: creating warmup promise printOutput=true
+whisper warmup: start root=C:\Users\p4tzr1ot\Desktop\Anonymizer\.claude\claudeclaw\whisper model=base.en
+whisper warmup: failed - No pre-built whisper binary for win32-arm64. Supported: linux-x64, darwin-arm64, darwin-x64, linux-arm64, win32-x64
+whisper warmup: failed - No pre-built whisper binary for win32-arm64. Supported: linux-x64, darwin-arm64, darwin-x64, linux-arm64, win32-x64
+  Commands registered: 8 (/start, /reset, /compact, /status, /context, /claudeclaw_create_skill, /claudeclaw_install_skill, /claudeclaw_telegram_react)
+  install: dev-browser@dev-browser-marketplace
+    deps (root): bun install
+bun install v1.3.13 (bf2e2cec)
+[0.99ms] migrated lockfile from package-lock.json
+Resolving dependencies
+Resolved, downloaded and extracted [1]
+Saved lockfile
+
+$ node scripts/postinstall.js
+Error: dev-browser postinstall failed: Unsupported platform for native download: win32-arm64.
+Supported platforms: darwin-arm64, darwin-x64, linux-arm64, linux-musl-x64, linux-x64, win32-x64.
+error: postinstall script from "browser-skill" exited with 1
+  error: https://github.com/SawyerHood/dev-browser — Command failed: bun install
+  skip: claude-mem@thedotmack (already installed)
+  skip: superpowers@superpowers-marketplace (already installed)
+  skip: ralph-loop@claude-plugins-official (already installed)
+  skip: hookify@claude-plugins-official (already installed)
+  skip: code-review@claude-plugins-official (already installed)
+  skip: pr-review-toolkit@claude-plugins-official (already installed)
+  skip: commit-commands@claude-plugins-official (already installed)
+  skip: plugin-dev@claude-plugins-official (already installed)
+preflight: 0 installed, 8 skipped
+[1:58:55 PM] Config change detected — heartbeat: disabled

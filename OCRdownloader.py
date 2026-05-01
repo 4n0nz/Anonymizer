@@ -18,6 +18,12 @@ import sys
 import json
 import shutil
 import argparse
+
+# Force UTF-8 sur Windows (évite UnicodeEncodeError avec les caractères box-drawing)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
 import re
 import tempfile
@@ -54,7 +60,7 @@ except ImportError:
 
 DOWNLOAD_DIR   = Path("OCR_courses")
 COOKIES_FILE   = "ocr_cookies.txt"
-VIDEO_FORMAT   = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+VIDEO_FORMAT   = "bestvideo+bestaudio/best"
 SLEEP_INTERVAL = 2
 MAX_RETRIES    = 5
 SUBTITLE_LANGS = "fr,en"
@@ -358,12 +364,345 @@ def fetch_activities(course_url, session):
 
 
 # ======================
+# EXTRACTION URL VIDÉO
+# ======================
+
+def _vimeo_url(vid_id, h=None):
+    if h:
+        return f"https://player.vimeo.com/video/{vid_id}?h={h}"
+    return f"https://vimeo.com/{vid_id}"
+
+
+def _fetch_vimeo_hash(vimeo_id, referer):
+    """
+    Récupère le hash unlisted d'une vidéo Vimeo en interrogeant
+    l'API Vimeo avec le referer OpenClassrooms.
+    Retourne le hash (str) ou None.
+    """
+    headers = {
+        "Referer":    referer,
+        "User-Agent": HEADERS["User-Agent"],
+        "Accept":     "application/json, text/html, */*",
+    }
+
+    # ── 1. oEmbed → contient l'iframe src avec ?h= ──
+    try:
+        r = requests.get(
+            "https://vimeo.com/api/oembed.json",
+            params={"url": f"https://vimeo.com/{vimeo_id}"},
+            headers=headers, timeout=15
+        )
+        if r.status_code == 200:
+            html = r.json().get("html", "")
+            m = re.search(r'player\.vimeo\.com/video/\d+\?h=([a-f0-9]+)', html)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+
+    # ── 2. Player page → contient "unlisted_hash" dans le JSON embarqué ──
+    try:
+        r = requests.get(
+            f"https://player.vimeo.com/video/{vimeo_id}",
+            headers=headers, timeout=15
+        )
+        if r.status_code == 200:
+            m = re.search(r'"unlisted_hash"\s*:\s*"([a-f0-9]+)"', r.text)
+            if m:
+                return m.group(1)
+            # Parfois la config JSON est dans la page
+            m = re.search(r'\?h=([a-f0-9]+)', r.text)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+
+    # ── 3. Player config endpoint ──
+    try:
+        r = requests.get(
+            f"https://player.vimeo.com/video/{vimeo_id}/config",
+            headers=headers, timeout=15
+        )
+        if r.status_code == 200:
+            data = r.json()
+            h = data.get("video", {}).get("unlisted_hash")
+            if h:
+                return h
+    except Exception:
+        pass
+
+    return None
+
+
+def _search_video_in_obj(obj, activity_id=None, depth=0):
+    """
+    Cherche récursivement un objet vidéo Vimeo dans un dict/list.
+    Si activity_id est fourni, priorise l'objet dont l'id correspond.
+    Retourne (vimeo_id, hash_or_None) ou None.
+    """
+    if depth > 20 or not isinstance(obj, (dict, list)):
+        return None
+
+    if isinstance(obj, list):
+        # Cherche d'abord dans l'item dont l'id == activity_id
+        if activity_id:
+            for item in obj:
+                if isinstance(item, dict) and str(item.get("id")) == str(activity_id):
+                    r = _search_video_in_obj(item, activity_id, depth + 1)
+                    if r:
+                        return r
+        for item in obj:
+            r = _search_video_in_obj(item, activity_id, depth + 1)
+            if r:
+                return r
+        return None
+
+    # dict
+    # Correspondance directe : objet avec id == activity_id et données vidéo
+    if activity_id and str(obj.get("id")) == str(activity_id):
+        vid = obj.get("vimeoId") or obj.get("videoId") or obj.get("vimeo_id")
+        h   = obj.get("vimeoHash") or obj.get("hash") or obj.get("vimeo_hash")
+        if vid and re.match(r"^\d{6,12}$", str(vid)):
+            return (str(vid), str(h) if h else None)
+        # Cherche dans les sous-objets de cet item
+        for v in obj.values():
+            r = _search_video_in_obj(v, None, depth + 1)
+            if r:
+                return r
+
+    # Objet avec vimeoId + hash directement
+    vid = obj.get("vimeoId") or obj.get("videoId") or obj.get("vimeo_id")
+    h   = obj.get("vimeoHash") or obj.get("hash") or obj.get("vimeo_hash")
+    if vid and re.match(r"^\d{6,12}$", str(vid)):
+        return (str(vid), str(h) if h else None)
+
+    # Descend récursivement
+    for v in obj.values():
+        r = _search_video_in_obj(v, activity_id, depth + 1)
+        if r:
+            return r
+
+    return None
+
+
+def extract_video_url(activity_url, session, debug=False):
+    """
+    Extrait l'URL Vimeo player (avec hash) de la vraie vidéo de la leçon.
+    Utilise --debug pour afficher toutes les données vidéo trouvées sur la page.
+    """
+    course_id   = extract_course_id(activity_url)
+    act_id_m    = re.search(r"/courses/\d+[^/]*/(\d+)", activity_url)
+    activity_id = act_id_m.group(1) if act_id_m else None
+    text        = None
+
+    # ── Stratégie 1 : API OC ──
+    if course_id and activity_id:
+        for api_url in [
+            f"{OCR_API}/courses/{course_id}/activities/{activity_id}",
+            f"{OCR_API}/activities/{activity_id}",
+            f"{OCR_API}/courses/{course_id}/activities/{activity_id}/video",
+        ]:
+            try:
+                r = session.get(api_url, timeout=15)
+                if debug:
+                    print(f"\n[DEBUG] API {api_url} → HTTP {r.status_code}")
+                    if r.status_code == 200:
+                        try:
+                            print(json.dumps(r.json(), indent=2, ensure_ascii=False)[:3000])
+                        except Exception:
+                            print(r.text[:3000])
+                if r.status_code == 200:
+                    data   = r.json()
+                    result = _search_video_in_obj(data, activity_id)
+                    if result:
+                        vid, h = result
+                        url = _vimeo_url(vid, h)
+                        print(f"         → vidéo (API) : {url[:80]}")
+                        return url
+            except Exception:
+                pass
+
+    # Chargement de la page
+    try:
+        r    = session.get(activity_url, timeout=20)
+        text = r.text
+    except Exception as e:
+        print(f"         [WARN] Impossible de charger la page : {e}")
+        return None
+
+    soup = BeautifulSoup(text, "html.parser")
+
+    # ── Stratégie 2 : __NEXT_DATA__ ──
+    nd_json = None
+    try:
+        m_nd = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            text, re.DOTALL
+        )
+        if m_nd:
+            nd_json = json.loads(m_nd.group(1))
+
+            if debug:
+                print(f"\n[DEBUG] Toutes les valeurs contenant 'vimeo' dans __NEXT_DATA__ :")
+                def _dump_vimeo(obj, path="", depth=0):
+                    if depth > 20: return
+                    if isinstance(obj, str) and "vimeo" in obj.lower():
+                        print(f"  {path} = {obj[:200]}")
+                    elif isinstance(obj, dict):
+                        for k, v in obj.items():
+                            _dump_vimeo(v, f"{path}.{k}", depth+1)
+                    elif isinstance(obj, list):
+                        for i, v in enumerate(obj[:30]):
+                            _dump_vimeo(v, f"{path}[{i}]", depth+1)
+                _dump_vimeo(nd_json)
+
+                print(f"\n[DEBUG] Clés de pageProps :")
+                def _dump_keys(obj, path="", depth=0):
+                    if depth > 3: return
+                    if isinstance(obj, dict):
+                        for k, v in obj.items():
+                            print(f"  {path}.{k}  ({type(v).__name__})")
+                            _dump_keys(v, f"{path}.{k}", depth+1)
+                _dump_keys(nd_json.get("props", {}).get("pageProps", {}))
+
+            # 2a : cherche vimeoId/vimeoHash dans les objets JSON
+            result = _search_video_in_obj(nd_json, activity_id)
+            if result:
+                vid, h = result
+                url = _vimeo_url(vid, h)
+                print(f"         → vidéo (next_data struct) : {url[:80]}")
+                return url
+
+            # 2b : cherche vimeo.com/ID dans les valeurs string
+            # (le contenu HTML de la leçon est stocké comme string JSON)
+            def _find_vimeo_in_strings(obj, depth=0):
+                if depth > 20:
+                    return None
+                if isinstance(obj, str) and "vimeo.com" in obj:
+                    m2 = re.search(r'vimeo\.com/(?:video/)?(\d{6,12})', obj)
+                    if m2:
+                        return m2.group(1)
+                elif isinstance(obj, dict):
+                    for v in obj.values():
+                        r2 = _find_vimeo_in_strings(v, depth + 1)
+                        if r2:
+                            return r2
+                elif isinstance(obj, list):
+                    for item in obj:
+                        r2 = _find_vimeo_in_strings(item, depth + 1)
+                        if r2:
+                            return r2
+                return None
+
+            vid = _find_vimeo_in_strings(nd_json)
+            if vid:
+                print(f"         → vidéo trouvée dans contenu (id={vid}), récupération du hash...")
+                h = _fetch_vimeo_hash(vid, activity_url)
+                url = _vimeo_url(vid, h)
+                print(f"         → {url[:80]}")
+                return url
+    except Exception:
+        pass
+
+    # ── Stratégie 3 : balises <video> dans le HTML ──
+    # OC embarque les vidéos via <video src="https://vimeo.com/ID">
+    for video_tag in soup.find_all("video", src=True):
+        src = video_tag.get("src", "")
+        m2 = re.search(r'vimeo\.com/(?:video/)?(\d{6,12})', src)
+        if m2:
+            vid = m2.group(1)
+            print(f"         → vidéo (<video> tag, id={vid}), récupération du hash...")
+            h   = _fetch_vimeo_hash(vid, activity_url)
+            url = _vimeo_url(vid, h)
+            print(f"         → {url[:80]}")
+            return url
+
+    # ── Stratégie 4 : scan exhaustif du HTML ──
+    if debug:
+        print(f"\n[DEBUG] Iframes :")
+        for iframe in soup.find_all("iframe", src=True):
+            print(f"  {iframe['src'][:200]}")
+
+        print(f"\n[DEBUG] Attributs data-* avec 'vimeo' ou 'video' :")
+        for tag in soup.find_all(True):
+            for attr, val in tag.attrs.items():
+                if isinstance(val, str) and ("vimeo" in attr+val or "video" in attr):
+                    print(f"  <{tag.name}> {attr}={val[:200]}")
+
+        print(f"\n[DEBUG] Meta og:video :")
+        for m in soup.find_all("meta", property=re.compile(r"og:video", re.I)):
+            print(f"  {m.get('property')} = {m.get('content','')[:200]}")
+
+        print(f"\n[DEBUG] JSON-LD :")
+        for s in soup.find_all("script", type="application/ld+json"):
+            try:
+                ld = json.loads(s.string or "")
+                if "vimeo" in json.dumps(ld).lower():
+                    print(json.dumps(ld, indent=2)[:2000])
+            except Exception: pass
+
+        print(f"\n[DEBUG] Toutes occurrences 'vimeo' dans le HTML :")
+        for m in re.finditer(r'.{0,80}vimeo.{0,80}', text, re.IGNORECASE):
+            print(f"  {m.group(0)}")
+
+    # ── Stratégie 5 : attributs data-vimeo-id ──
+    for tag in soup.find_all(True, attrs={"data-vimeo-id": True}):
+        vid = tag.get("data-vimeo-id", "")
+        h   = tag.get("data-vimeo-hash") or tag.get("data-hash")
+        if re.match(r"^\d{6,12}$", str(vid)):
+            url = _vimeo_url(vid, h)
+            print(f"         → vidéo (data-attr) : {url[:80]}")
+            return url
+
+    # og:video
+    og = soup.find("meta", property=re.compile(r"og:video", re.I))
+    if og and og.get("content"):
+        m = re.search(r'vimeo\.com/(?:video/)?(\d{6,12})', og["content"])
+        if m:
+            url = f"https://vimeo.com/{m.group(1)}"
+            print(f"         → vidéo (og:video) : {url[:80]}")
+            return url
+
+    # JSON-LD
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            ld  = json.loads(script.string or "")
+            s   = json.dumps(ld)
+            m   = re.search(r'player\.vimeo\.com/video/(\d{6,12})[^"\']*[?&]h=([a-f0-9]+)', s)
+            if m:
+                url = _vimeo_url(m.group(1), m.group(2))
+                print(f"         → vidéo (json-ld) : {url[:80]}")
+                return url
+        except Exception:
+            pass
+
+    # Tous les patterns Vimeo dans le HTML brut
+    all_found = []
+    for pat in [
+        r'player\.vimeo\.com/video/(\d{6,12})[^"\'<>\s]*[?&]h=([a-f0-9]+)',
+        r'player\.vimeo\.com/video/(\d{6,12})',
+        r'vimeo\.com/(\d{6,12})[?&]h=([a-f0-9]+)',
+    ]:
+        for m in re.finditer(pat, text):
+            vid = m.group(1)
+            h   = m.group(2) if m.lastindex and m.lastindex >= 2 else None
+            all_found.append((vid, h))
+
+    # Stratégie 6 : scan HTML brut — UNIQUEMENT si vidéo dans <video> ou content
+    # On n'utilise plus le fallback HTML ici car il trouve les promos OC.
+    # Si aucune des stratégies ciblées n'a trouvé de vidéo, c'est une activité
+    # texte/quiz → pas de téléchargement.
+
+    return None  # Activité sans vidéo → sera skippée
+
+
+# ======================
 # ARGS YT-DLP COMMUNS
 # ======================
 
-def _yt_dlp_common(cookies_path, quality):
+def _yt_dlp_common(cookies_path, quality, referer=OCR_BASE + "/"):
     """Arguments yt-dlp communs à tous les appels."""
-    fmt = VIDEO_FORMAT if quality == "best" else f"best[height<={quality}]"
+    fmt = VIDEO_FORMAT if quality == "best" else f"bestvideo[height<={quality}]+bestaudio/best[height<={quality}]"
     return [
         "--format",              fmt,
         "--merge-output-format", "mp4",
@@ -380,9 +719,7 @@ def _yt_dlp_common(cookies_path, quality):
         "--no-overwrites",
         "--progress",
         "--cookies",             cookies_path,
-        "--add-header",          f"Referer: {OCR_BASE}/",
-        # Évite l'erreur "macOS API 404" sur les vidéos Vimeo embarquées
-        "--extractor-args",      "vimeo:api_token_source=none",
+        "--add-header",          f"Referer: {referer}",
     ]
 
 
@@ -390,10 +727,13 @@ def _yt_dlp_common(cookies_path, quality):
 # TÉLÉCHARGEMENT
 # ======================
 
-def download_videos(course_url, session, cookies_path, output_dir, quality="best"):
+def download_videos(course_url, session, cookies_path, output_dir, quality="best",
+                    debug=False, debug_activity=None):
     """
     Télécharge toutes les vidéos d'un cours.
-    Si les activités sont trouvées via l'API → téléchargement par activité.
+    Pour chaque activité :
+      1. Extrait l'URL Vimeo player (avec hash) depuis la page OC
+      2. Passe cette URL directement à yt-dlp → bypass l'extractor générique
     Sinon → fallback mode playlist yt-dlp.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -424,6 +764,31 @@ def download_videos(course_url, session, cookies_path, output_dir, quality="best
         result = subprocess.run(cmd)
         return result.returncode == 0
 
+    # Mode scan : liste les vidéos trouvées sans télécharger
+    if debug:
+        print(f"[*] SCAN — {len(activities)} activité(s)\n")
+        for act in activities:
+            print(f"  [{act['index']:02d}/{len(activities):02d}] {act['title']}")
+            vurl = extract_video_url(act["url"], session, debug=False)
+            if vurl:
+                print(f"         OK → {vurl[:80]}")
+            else:
+                print(f"         MANQUANT → {act['url']}")
+            time.sleep(0.5)
+        print()
+        return True
+
+    # Mode debug-activity : diagnostic complet d'une activité spécifique
+    if debug_activity is not None:
+        target = next((a for a in activities if a["index"] == debug_activity), None)
+        if not target:
+            print(f"[ERREUR] Activité {debug_activity} introuvable")
+            return False
+        print(f"[DEBUG-ACTIVITY {debug_activity}] {target['title']}")
+        print(f"  URL : {target['url']}\n")
+        extract_video_url(target["url"], session, debug=True)
+        return True
+
     # Téléchargement activité par activité
     print(f"[*] {len(activities)} activité(s) à télécharger\n")
     ok_count = 0
@@ -438,10 +803,18 @@ def download_videos(course_url, session, cookies_path, output_dir, quality="best
 
         print(f"  [{idx:02d}/{len(activities):02d}] {title}")
 
+        # Extraire l'URL vidéo directe (player Vimeo avec hash)
+        video_url = extract_video_url(url, session, debug=debug) if session else None
+
+        if video_url is None:
+            print(f"           → [SKIP] Activité sans vidéo (texte / quiz)")
+            ok_count += 1  # pas une erreur
+            continue
+
         cmd = (
             ["yt-dlp", "--output", out_tmpl]
-            + _yt_dlp_common(cookies_path, quality)
-            + [url]
+            + _yt_dlp_common(cookies_path, quality, referer=url)
+            + [video_url]
         )
 
         result = subprocess.run(cmd)
@@ -525,6 +898,10 @@ def main():
                         help="Liste les leçons sans télécharger")
     parser.add_argument("--update",         action="store_true",
                         help="Mettre à jour yt-dlp avant de télécharger")
+    parser.add_argument("--debug",          action="store_true",
+                        help="Scan toutes les activités sans télécharger")
+    parser.add_argument("--debug-activity", type=int, default=None, metavar="N",
+                        help="Diagnostic complet de l'activité N (ex: --debug-activity 2)")
 
     args = parser.parse_args()
 
@@ -581,7 +958,9 @@ def main():
             print()
             return
 
-        success = download_videos(course_url, session, cookies_path, output_dir, args.quality)
+        success = download_videos(course_url, session, cookies_path, output_dir, args.quality,
+                                   debug=args.debug,
+                                   debug_activity=getattr(args, "debug_activity", None))
 
         if not success:
             print("\n[ERREUR] Téléchargement échoué.")
