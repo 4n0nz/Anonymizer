@@ -1,0 +1,18 @@
+# Scripts Linux/WSL → toujours LF (sinon bash plante avec \r)
+*.sh    text eol=lf
+
+# Scripts Windows → toujours CRLF
+*.bat   text eol=crlf
+
+# Python → LF (cross-platform, standard)
+*.py    text eol=lf
+
+# JSON, Markdown → LF
+*.json  text eol=lf
+*.md    text eol=lf
+
+# Fichiers binaires → pas de conversion
+*.mp4   binary
+*.png   binary
+*.jpg   binary
+*.7z    binary

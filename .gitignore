@@ -1,0 +1,30 @@
+# Identifiants — ne jamais pousser
+ocr_credentials.py
+ocr_cookies.txt
+*.cookies.txt
+.env
+
+# Dossiers générés / temporaires
+OCR_courses/
+output/
+input/
+__pycache__/
+*.pyc
+logs/
+debug_output.txt
+bfg-report/
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Fichiers binaires lourds — restent sur disque, pas dans git
+resources/*.7z.*
+resources/*.mp4
+resources/*.task
+resources/*.tflite
+resources/*.png
+resources/mask_keypoints.json
+
+# Virtualenv
+mask_env/
