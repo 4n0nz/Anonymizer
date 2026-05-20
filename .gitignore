@@ -18,11 +18,13 @@ bfg-report/
 .claude/
 CLAUDE.md
 
-# Contenu des dossiers input/output (pas les dossiers eux-mêmes)
+# Contenu des dossiers input/output/logs (pas les dossiers eux-mêmes)
 input/*
 !input/readme
 output/*
 !output/readme
+logs/*
+!logs/readme
 
 # Virtualenv
 mask_env/
