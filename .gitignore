@@ -18,13 +18,5 @@ bfg-report/
 .claude/
 CLAUDE.md
 
-# Fichiers binaires lourds — restent sur disque, pas dans git
-resources/*.7z.*
-resources/*.mp4
-resources/*.task
-resources/*.tflite
-resources/*.png
-resources/mask_keypoints.json
-
 # Virtualenv
 mask_env/
