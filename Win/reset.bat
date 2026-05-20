@@ -69,13 +69,16 @@ exit /b 0
 
 :: -----------------------------------------------
 :: Fonction : vide le contenu d'un dossier (le garde lui-meme)
+::            conserve le fichier "readme" s'il existe
 :: -----------------------------------------------
 :clear_dir
 set "TARGET=%~1"
 if exist "%TARGET%\" (
     echo [*] Vidage de %TARGET%\
-    :: Supprime tous les fichiers
-    del /f /q /a "%TARGET%\*" 2>nul
+    :: Supprime tous les fichiers sauf "readme"
+    for %%F in ("%TARGET%\*") do (
+        if /i not "%%~nxF"=="readme" del /f /q "%%F" 2>nul
+    )
     :: Supprime tous les sous-dossiers (visibles + cachés)
     for /D %%D in ("%TARGET%\*") do rmdir /s /q "%%D" 2>nul
     for /F "delims=" %%D in ('dir /b /a:dh "%TARGET%" 2^>nul') do rmdir /s /q "%TARGET%\%%D" 2>nul
